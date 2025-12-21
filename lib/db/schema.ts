@@ -1,5 +1,17 @@
 import { pgTable, text, timestamp, doublePrecision, integer, jsonb, uuid, boolean } from "drizzle-orm/pg-core";
 
+export const users = pgTable("users", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  username: text("username").notNull().unique(),
+  email: text("email").notNull().unique(),
+  password_hash: text("password_hash").notNull(), // bcrypt hashed password
+  full_name: text("full_name"),
+  role: text("role").notNull().default("user"), // admin, user
+  is_active: boolean("is_active").notNull().default(true),
+  created_at: timestamp("created_at").defaultNow().notNull(),
+  updated_at: timestamp("updated_at").defaultNow().notNull(),
+});
+
 export const devices = pgTable("devices", {
   hashed_device_id: text("hashed_device_id").primaryKey(),
   model: text("model").notNull(),

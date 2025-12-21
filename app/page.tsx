@@ -49,14 +49,26 @@ export default function LoginPage() {
     setLoading(true);
     setError(null);
 
-    // Hardcoded check as requested by the user prompt context
-    // In a real app, this would verify against a DB hash or auth service
-    if (values.username === "rflmwcom" && values.password === "8-18Zfyd9;YYAe") {
-      // Simulate network delay for effect
-      await new Promise((resolve) => setTimeout(resolve, 800));
+    try {
+      const response = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(values),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        setError(data.message || "Login failed");
+        setLoading(false);
+        return;
+      }
+
+      // Store user data (in production, use proper session management)
+      localStorage.setItem('user', JSON.stringify(data.user));
       router.push("/dashboard");
-    } else {
-      setError("Invalid username or password");
+    } catch (err) {
+      setError("An error occurred. Please try again.");
       setLoading(false);
     }
   }

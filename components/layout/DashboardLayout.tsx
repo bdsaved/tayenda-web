@@ -12,6 +12,7 @@ import {
     LogOut,
     Menu,
     Smartphone,
+    Users,
 } from "lucide-react";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -28,6 +29,7 @@ const sidebarItems = [
     { icon: LayoutDashboard, label: "Overview", href: "/dashboard" },
     { icon: Map, label: "Trips", href: "/dashboard/trips" },
     { icon: Smartphone, label: "Devices", href: "/dashboard/devices" },
+    { icon: Users, label: "Users", href: "/dashboard/users" },
     { icon: Settings, label: "Settings", href: "/dashboard/settings" },
 ];
 
@@ -60,8 +62,8 @@ export default function DashboardLayout({
                                 key={item.href}
                                 href={item.href}
                                 className={`flex items-center gap-3 px-3 py-2 rounded-md transition-colors text-sm font-medium ${isActive
-                                        ? "bg-primary/10 text-primary"
-                                        : "text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900"
+                                    ? "bg-primary/10 text-primary"
+                                    : "text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900"
                                     }`}
                             >
                                 <item.icon className={`w-5 h-5 ${isActive ? "text-primary" : "text-neutral-500"}`} />
@@ -104,8 +106,8 @@ export default function DashboardLayout({
                                             href={item.href}
                                             onClick={() => setIsMobileMenuOpen(false)}
                                             className={`flex items-center gap-3 px-3 py-2 rounded-md transition-colors text-sm font-medium ${pathname === item.href
-                                                    ? "bg-primary/10 text-primary"
-                                                    : "text-neutral-600 hover:bg-neutral-100"
+                                                ? "bg-primary/10 text-primary"
+                                                : "text-neutral-600 hover:bg-neutral-100"
                                                 }`}
                                         >
                                             <item.icon className="w-5 h-5" />

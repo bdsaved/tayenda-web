@@ -1,6 +1,6 @@
 import { drizzle } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
-import * as schema from './lib/db/schema';
+import * as schema from '../lib/db/schema';
 import * as bcrypt from 'bcryptjs';
 
 const { DB_HOST, DB_USER, DB_PASSWORD, DB_NAME } = process.env;

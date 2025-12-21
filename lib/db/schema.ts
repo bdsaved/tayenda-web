@@ -7,6 +7,7 @@ export const devices = pgTable("devices", {
   app_version: text("app_version").notNull(),
   created_at: timestamp("created_at").defaultNow().notNull(),
   user_uuid: uuid("user_uuid").defaultRandom().notNull(), // Generated UUID for the user associated with this device
+  api_key: text("api_key"), // Dynamic API Key associated with the device/user session
 });
 
 export const trips = pgTable("trips", {

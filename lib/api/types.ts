@@ -84,5 +84,6 @@ export interface DeviceRegistrationRequest {
 
 export interface DeviceRegistrationResponse {
     user_uuid: string; // UUID
+    api_key: string; // Dynamic API Key
     status: "registered";
 }

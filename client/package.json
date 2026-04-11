@@ -1,0 +1,31 @@
+{
+  "name": "tayenda-client",
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vinxi dev",
+    "build": "vinxi build",
+    "start": "vinxi start"
+  },
+  "dependencies": {
+    "@tanstack/react-router": "^1.60.0",
+    "@tanstack/react-query": "^5.59.0",
+    "@tanstack/start": "^0.0.1-beta.210",
+    "vinxi": "^0.4.3",
+    "react": "19.0.0-rc-66a3035f-20241107",
+    "react-dom": "19.0.0-rc-66a3035f-20241107",
+    "lucide-react": "^0.454.0",
+    "clsx": "^2.1.1",
+    "tailwind-merge": "^2.5.4",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@tanstack/router-plugin": "^1.58.11",
+    "@types/react": "^19.0.0-rc.1",
+    "@types/react-dom": "^19.0.0-rc.1",
+    "autoprefixer": "^10.4.20",
+    "postcss": "^8.4.47",
+    "tailwindcss": "^4.0.0-alpha.25",
+    "typescript": "^5.6.3"
+  }
+}

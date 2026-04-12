@@ -8,24 +8,53 @@
     "start": "vinxi start"
   },
   "dependencies": {
-    "@tanstack/react-router": "^1.60.0",
-    "@tanstack/react-query": "^5.59.0",
-    "@tanstack/start": "^0.0.1-beta.210",
-    "vinxi": "^0.4.3",
-    "react": "19.0.0-rc-66a3035f-20241107",
-    "react-dom": "19.0.0-rc-66a3035f-20241107",
-    "lucide-react": "^0.454.0",
-    "clsx": "^2.1.1",
-    "tailwind-merge": "^2.5.4",
-    "zod": "^3.23.8"
+    "@radix-ui/react-slot": "^1.2.4",
+    "@tailwindcss/vite": "^4.2.2",
+    "@tanstack/react-query": "5.66.0",
+    "@tanstack/react-router": "1.120.20",
+    "@tanstack/react-start": "1.120.20",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "2.1.1",
+    "lucide-react": "0.475.0",
+    "react": "19.2.5",
+    "react-dom": "19.2.5",
+    "tailwind-merge": "3.5.0",
+    "vinxi": "0.5.11",
+    "zod": "3.25.76"
   },
   "devDependencies": {
-    "@tanstack/router-plugin": "^1.58.11",
-    "@types/react": "^19.0.0-rc.1",
-    "@types/react-dom": "^19.0.0-rc.1",
-    "autoprefixer": "^10.4.20",
-    "postcss": "^8.4.47",
-    "tailwindcss": "^4.0.0-alpha.25",
-    "typescript": "^5.6.3"
+    "@tanstack/router-plugin": "1.120.20",
+    "@types/react": "19.2.14",
+    "@types/react-dom": "19.2.3",
+    "autoprefixer": "10.4.27",
+    "postcss": "8.5.9",
+    "tailwindcss": "4.2.2",
+    "typescript": "5.9.3",
+    "vite-tsconfig-paths": "5.1.4"
+  },
+  "pnpm": {
+    "overrides": {
+      "@tanstack/history": "1.120.17",
+      "@tanstack/react-router": "1.120.20",
+      "@tanstack/router-core": "1.120.19",
+      "@tanstack/router-plugin": "1.120.20",
+      "@tanstack/router-generator": "1.120.20",
+      "@tanstack/router-utils": "1.120.17",
+      "@tanstack/virtual-file-routes": "1.120.17",
+      "@tanstack/react-start-config": "1.120.20",
+      "@tanstack/start-api-routes": "1.120.19",
+      "@tanstack/react-start-client": "1.120.20",
+      "@tanstack/react-start-server": "1.120.20",
+      "@tanstack/react-start-router-manifest": "1.120.19",
+      "@tanstack/react-start-plugin": "1.120.17",
+      "@tanstack/start-server-functions-handler": "1.120.19",
+      "@tanstack/start-server-functions-client": "1.120.19",
+      "@tanstack/start-server-functions-server": "1.120.17",
+      "@tanstack/start-server-functions-ssr": "1.120.19",
+      "@tanstack/start-server-functions-fetcher": "1.120.19",
+      "@tanstack/start-client-core": "1.120.19",
+      "@tanstack/start-server-core": "1.120.19",
+      "@tanstack/server-functions-plugin": "1.120.17"
+    }
   }
 }

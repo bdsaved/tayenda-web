@@ -39,3 +39,11 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+client/node_modules/
+client/.output/
+client/.vinxi/
+client/app.config.timestamp_*.js
+.venv/
+
+*.pyc

@@ -47,3 +47,5 @@ client/app.config.timestamp_*.js
 .venv/
 
 *.pyc
+server/tayenda.db
+server/storage/

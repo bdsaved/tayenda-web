@@ -35,7 +35,9 @@ services:
     ports:
       - "3000:3000"
     environment:
-      VITE_API_URL: https://api.tayenda.renai-labs.com
+      VITE_API_URL: https://strongbox-emphases-uptown.ngrok-free.dev
+      VITE_PUBLIC_WEB_URL: https://tayenda.renai-labs.com
+      VITE_NGROK_URL: https://strongbox-emphases-uptown.ngrok-free.dev
     depends_on:
       - server
 

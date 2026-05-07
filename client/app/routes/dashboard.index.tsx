@@ -1,161 +1,148 @@
 import { createFileRoute } from '@tanstack/react-router'
-import {
-  Activity,
-  AlertTriangle,
-  ArrowUpRight,
-  Map,
-  Smartphone,
-  type LucideIcon,
-} from 'lucide-react'
+import { Activity, CircleAlert, Database, Smartphone } from 'lucide-react'
+import { useEffect, useState } from 'react'
+
 import { Badge } from '../components/ui/badge'
-import { Button } from '../components/ui/button'
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '../components/ui/card'
-import { Separator } from '../components/ui/separator'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card'
+import { fetchHealth, fetchTrips, type TripListItem } from '../lib/api'
 
 export const Route = createFileRoute('/dashboard/')({
   component: DashboardOverview,
 })
 
-const stats = [
-  {
-    title: 'Trips ingested',
-    value: '1,284',
-    note: '+12% over the last 30 days',
-    icon: Activity,
-  },
-  {
-    title: 'Active devices',
-    value: '42',
-    note: '7 devices uploaded in the last hour',
-    icon: Smartphone,
-  },
-  {
-    title: 'Average IRI',
-    value: '3.8',
-    note: 'Across verified corridor segments',
-    icon: Map,
-  },
-  {
-    title: 'Critical hazards',
-    value: '7',
-    note: '2 requiring immediate inspection',
-    icon: AlertTriangle,
-  },
-] as const
-
-const recentSegments = [
-  { id: 'M1-1042', corridor: 'Blantyre - Lilongwe', iri: '2.1', status: 'Stable' },
-  { id: 'S122-188', corridor: 'Dedza connector', iri: '3.9', status: 'Watchlist' },
-  { id: 'T301-044', corridor: 'Mzuzu freight link', iri: '4.6', status: 'Escalate' },
-  { id: 'M5-901', corridor: 'Salima lakeshore', iri: '2.7', status: 'Stable' },
-] as const
-
-const systemHealth = [
-  { label: 'API and ingest', status: 'Online', tone: 'success' as const },
-  { label: 'ML scoring queue', status: 'Healthy', tone: 'success' as const },
-  { label: 'Database cluster', status: 'Review', tone: 'warning' as const },
-  { label: 'Cold storage sync', status: 'Online', tone: 'success' as const },
-] as const
+type OverviewState = {
+  trips: TripListItem[]
+  health: string
+  loading: boolean
+  error: string | null
+}
 
 function DashboardOverview() {
+  const [state, setState] = useState<OverviewState>({
+    trips: [],
+    health: 'checking',
+    loading: true,
+    error: null,
+  })
+
+  useEffect(() => {
+    let cancelled = false
+
+    async function load() {
+      try {
+        const [tripsResponse, healthResponse] = await Promise.all([fetchTrips(), fetchHealth()])
+        if (cancelled) return
+        setState({
+          trips: tripsResponse.items,
+          health: healthResponse.status,
+          loading: false,
+          error: null,
+        })
+      } catch (error) {
+        if (cancelled) return
+        setState((current) => ({
+          ...current,
+          loading: false,
+          error: error instanceof Error ? error.message : 'Failed to load dashboard data',
+        }))
+      }
+    }
+
+    load()
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  const trips = state.trips
+  const uploadedTrips = trips.filter((trip) => trip.status === 'UPLOADED').length
+  const uploadIssues = trips.filter((trip) => trip.status !== 'UPLOADED').length
+  const activeDevices = new Set(trips.map((trip) => trip.device_id)).size
+  const samplesCaptured = trips.reduce((total, trip) => total + trip.total_samples_received, 0)
+  const recentTrips = trips.slice(0, 5)
+
   return (
-    <div className="section-enter space-y-6">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+    <div className="section-enter space-y-4">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <Badge className="w-fit">Overview</Badge>
-          <h2 className="mt-3 font-display text-4xl text-foreground">
-            Real-time network posture
+          <h2 className="mt-3 text-3xl font-semibold tracking-tight text-foreground">
+            Shared sync status
           </h2>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
-            Focus the team on verified uploads, segment quality drift, and where
-            corridor maintenance needs attention next.
+            The mobile uploader and the web intake form now land in the same trip store, so this
+            view reflects the real end-to-end status instead of fixed placeholders.
           </p>
         </div>
-        <Button variant="outline">
-          Open incident queue
-          <ArrowUpRight className="size-4" />
-        </Button>
+        <Badge variant={state.health === 'healthy' ? 'success' : 'warning'}>
+          API {state.health}
+        </Badge>
       </div>
+
+      {state.error ? (
+        <Card className="border-rose-300">
+          <CardContent className="flex items-center gap-3 py-4 text-sm text-rose-700">
+            <CircleAlert className="size-4" />
+            <span>{state.error}</span>
+          </CardContent>
+        </Card>
+      ) : null}
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        {stats.map((stat) => (
-          <StatCard key={stat.title} {...stat} />
-        ))}
+        <MetricCard label="Trips recorded" value={String(trips.length)} detail="All mobile and web uploads" icon={Activity} />
+        <MetricCard label="Trips synced" value={String(uploadedTrips)} detail="Finished and finalized" icon={Database} />
+        <MetricCard label="Active devices" value={String(activeDevices)} detail="Unique device identities" icon={Smartphone} />
+        <MetricCard label="Upload issues" value={String(uploadIssues)} detail="Pending or incomplete work" icon={CircleAlert} />
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(320px,0.8fr)]">
-        <Card className="bg-white/86">
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(300px,0.8fr)]">
+        <Card>
           <CardHeader>
-            <CardTitle>Recently scored segments</CardTitle>
-            <CardDescription>
-              Deterministic snapshot of the latest corridor samples ready for review.
-            </CardDescription>
+            <CardTitle>Recent trip activity</CardTitle>
+            <CardDescription>Latest uploads reaching the shared dashboard.</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
-            {recentSegments.map((segment, index) => (
-              <div key={segment.id}>
-                <div className="flex flex-col gap-3 rounded-[24px] bg-secondary/45 p-4 md:flex-row md:items-center">
-                  <div className="flex size-12 items-center justify-center rounded-2xl bg-white text-sm font-semibold text-primary shadow-sm">
-                    {segment.id.slice(0, 2)}
+          <CardContent className="space-y-3">
+            {state.loading ? (
+              <p className="text-sm text-muted-foreground">Loading trip activity...</p>
+            ) : recentTrips.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No trips have been uploaded yet.</p>
+            ) : (
+              recentTrips.map((trip) => (
+                <div key={trip.trip_id} className="grid gap-2 border border-border bg-secondary/40 p-4 md:grid-cols-[1.2fr_0.8fr_0.6fr]">
+                  <div>
+                    <p className="font-mono text-xs font-medium text-primary">{trip.trip_id}</p>
+                    <p className="mt-1 text-sm font-medium text-foreground">
+                      {trip.device_model ?? 'Unknown device'}
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      {trip.operator_name ?? 'Mobile sync'} / {trip.upload_source}
+                    </p>
                   </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-semibold text-foreground">{segment.id}</p>
-                    <p className="text-sm text-muted-foreground">{segment.corridor}</p>
+                  <div>
+                    <p className="text-sm font-medium text-foreground">{formatDate(trip.start_time)}</p>
+                    <p className="text-sm text-muted-foreground">
+                      {trip.total_samples_received.toLocaleString()} samples
+                    </p>
                   </div>
-                  <div className="flex items-center gap-3">
-                    <div className="text-right">
-                      <p className="text-sm font-semibold text-foreground">IRI {segment.iri}</p>
-                      <p className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
-                        Quality score
-                      </p>
-                    </div>
-                    <Badge
-                      variant={
-                        segment.status === 'Escalate'
-                          ? 'destructive'
-                          : segment.status === 'Watchlist'
-                            ? 'warning'
-                            : 'success'
-                      }
-                    >
-                      {segment.status}
-                    </Badge>
+                  <div className="flex items-start justify-start md:justify-end">
+                    <Badge variant={statusVariant(trip.status)}>{trip.status}</Badge>
                   </div>
                 </div>
-                {index < recentSegments.length - 1 ? <Separator className="mt-4" /> : null}
-              </div>
-            ))}
+              ))
+            )}
           </CardContent>
         </Card>
 
-        <Card className="bg-white/86">
+        <Card>
           <CardHeader>
-            <CardTitle>System health</CardTitle>
-            <CardDescription>
-              Core services behind upload, scoring, and storage.
-            </CardDescription>
+            <CardTitle>Pipeline notes</CardTitle>
+            <CardDescription>Quick operational summary from current records.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            {systemHealth.map((item) => (
-              <div
-                key={item.label}
-                className="flex items-center justify-between rounded-[22px] bg-secondary/45 px-4 py-3"
-              >
-                <div>
-                  <p className="text-sm font-medium text-foreground">{item.label}</p>
-                  <p className="text-xs text-muted-foreground">Operational status</p>
-                </div>
-                <Badge variant={item.tone === 'warning' ? 'warning' : 'success'}>
-                  {item.status}
-                </Badge>
-              </div>
-            ))}
+            <SummaryRow label="Samples stored" value={samplesCaptured.toLocaleString()} />
+            <SummaryRow label="Latest upload source" value={recentTrips[0]?.upload_source ?? 'none'} />
+            <SummaryRow label="Trips awaiting review" value={String(uploadIssues)} />
+            <SummaryRow label="Health state" value={state.health} />
           </CardContent>
         </Card>
       </div>
@@ -163,31 +150,52 @@ function DashboardOverview() {
   )
 }
 
-function StatCard({
-  title,
+function MetricCard({
+  label,
   value,
-  note,
+  detail,
   icon: Icon,
 }: {
-  title: string
+  label: string
   value: string
-  note: string
-  icon: LucideIcon
+  detail: string
+  icon: typeof Activity
 }) {
   return (
-    <Card className="bg-white/86">
-      <CardContent className="flex items-start justify-between gap-4 py-6">
+    <Card>
+      <CardContent className="flex items-start justify-between gap-4 py-5">
         <div>
-          <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-muted-foreground">
-            {title}
-          </p>
-          <p className="mt-3 text-4xl font-semibold text-foreground">{value}</p>
-          <p className="mt-2 text-sm leading-6 text-muted-foreground">{note}</p>
+          <p className="font-mono text-[11px] uppercase tracking-[0.2em] text-muted-foreground">{label}</p>
+          <p className="mt-3 text-4xl font-semibold tracking-tight text-foreground">{value}</p>
+          <p className="mt-2 text-sm leading-6 text-muted-foreground">{detail}</p>
         </div>
-        <div className="flex size-12 items-center justify-center rounded-2xl bg-primary/10 text-primary">
-          <Icon className="size-5" />
+        <div className="border border-border bg-secondary p-2">
+          <Icon className="size-5 text-primary" />
         </div>
       </CardContent>
     </Card>
   )
+}
+
+function SummaryRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="border border-border bg-secondary/40 p-4">
+      <p className="font-mono text-[11px] uppercase tracking-[0.2em] text-muted-foreground">{label}</p>
+      <p className="mt-2 text-sm font-medium text-foreground">{value}</p>
+    </div>
+  )
+}
+
+function statusVariant(status: string): 'success' | 'warning' | 'destructive' | 'outline' {
+  if (status === 'UPLOADED') return 'success'
+  if (status === 'FAILED') return 'destructive'
+  if (status === 'UPLOADING' || status === 'PENDING') return 'warning'
+  return 'outline'
+}
+
+function formatDate(value: number) {
+  return new Intl.DateTimeFormat(undefined, {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  }).format(new Date(value))
 }

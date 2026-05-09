@@ -1,148 +1,144 @@
 import { createFileRoute } from '@tanstack/react-router'
-import { Activity, CircleAlert, Database, Smartphone } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { Activity, AlertTriangle, CheckCircle2, HardDrive, Route as RouteIcon, Smartphone } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
 
 import { Badge } from '../components/ui/badge'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card'
-import { fetchHealth, fetchTrips, type TripListItem } from '../lib/api'
+import { fetchTrips, type TripListItem } from '../lib/api'
+import { captureScore, deriveAlerts, deriveDevices, formatDate, formatDistance } from '../lib/dashboard'
 
 export const Route = createFileRoute('/dashboard/')({
   component: DashboardOverview,
 })
 
-type OverviewState = {
-  trips: TripListItem[]
-  health: string
-  loading: boolean
-  error: string | null
-}
-
 function DashboardOverview() {
-  const [state, setState] = useState<OverviewState>({
-    trips: [],
-    health: 'checking',
-    loading: true,
-    error: null,
-  })
+  const [trips, setTrips] = useState<TripListItem[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     let cancelled = false
-
-    async function load() {
-      try {
-        const [tripsResponse, healthResponse] = await Promise.all([fetchTrips(), fetchHealth()])
+    fetchTrips()
+      .then((response) => {
         if (cancelled) return
-        setState({
-          trips: tripsResponse.items,
-          health: healthResponse.status,
-          loading: false,
-          error: null,
-        })
-      } catch (error) {
+        setTrips(response.items)
+        setError(null)
+      })
+      .catch((loadError) => {
         if (cancelled) return
-        setState((current) => ({
-          ...current,
-          loading: false,
-          error: error instanceof Error ? error.message : 'Failed to load dashboard data',
-        }))
-      }
-    }
+        setError(loadError instanceof Error ? loadError.message : 'Failed to load dashboard')
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
 
-    load()
     return () => {
       cancelled = true
     }
   }, [])
 
-  const trips = state.trips
-  const uploadedTrips = trips.filter((trip) => trip.status === 'UPLOADED').length
-  const uploadIssues = trips.filter((trip) => trip.status !== 'UPLOADED').length
-  const activeDevices = new Set(trips.map((trip) => trip.device_id)).size
-  const samplesCaptured = trips.reduce((total, trip) => total + trip.total_samples_received, 0)
-  const recentTrips = trips.slice(0, 5)
+  const devices = useMemo(() => deriveDevices(trips), [trips])
+  const alerts = useMemo(() => deriveAlerts(trips), [trips])
+  const score = captureScore(trips)
+  const uploaded = trips.filter((trip) => trip.status === 'UPLOADED').length
+  const samples = trips.reduce((total, trip) => total + trip.total_samples_received, 0)
+  const distance = trips.reduce((total, trip) => total + (trip.total_distance ?? 0), 0)
+  const latestTrips = trips.slice(0, 6)
 
   return (
-    <div className="section-enter space-y-4">
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-        <div>
-          <Badge className="w-fit">Overview</Badge>
-          <h2 className="mt-3 text-3xl font-semibold tracking-tight text-foreground">
-            Shared sync status
-          </h2>
-          <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
-            The mobile uploader and the web intake form now land in the same trip store, so this
-            view reflects the real end-to-end status instead of fixed placeholders.
-          </p>
-        </div>
-        <Badge variant={state.health === 'healthy' ? 'success' : 'warning'}>
-          API {state.health}
-        </Badge>
-      </div>
-
-      {state.error ? (
-        <Card className="border-rose-300">
-          <CardContent className="flex items-center gap-3 py-4 text-sm text-rose-700">
-            <CircleAlert className="size-4" />
-            <span>{state.error}</span>
-          </CardContent>
+    <div className="space-y-4">
+      {error ? (
+        <Card className="border-zinc-900">
+          <CardContent className="py-4 text-sm text-foreground">{error}</CardContent>
         </Card>
       ) : null}
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <MetricCard label="Trips recorded" value={String(trips.length)} detail="All mobile and web uploads" icon={Activity} />
-        <MetricCard label="Trips synced" value={String(uploadedTrips)} detail="Finished and finalized" icon={Database} />
-        <MetricCard label="Active devices" value={String(activeDevices)} detail="Unique device identities" icon={Smartphone} />
-        <MetricCard label="Upload issues" value={String(uploadIssues)} detail="Pending or incomplete work" icon={CircleAlert} />
-      </div>
-
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(300px,0.8fr)]">
-        <Card>
+      <div className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
+        <Card className="glass-panel">
           <CardHeader>
-            <CardTitle>Recent trip activity</CardTitle>
-            <CardDescription>Latest uploads reaching the shared dashboard.</CardDescription>
+            <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+              <div>
+                <Badge>Capture state</Badge>
+                <CardTitle className="mt-4 text-3xl">Network readiness</CardTitle>
+                <CardDescription>
+                  One operational score from finalized trips, metadata completeness, and upload health.
+                </CardDescription>
+              </div>
+              <div className="border border-border bg-secondary px-5 py-4 text-right">
+                <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground">Score</p>
+                <p className="mt-1 text-4xl font-semibold">{score}%</p>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="h-3 border border-border bg-background">
+              <div className="h-full bg-zinc-900" style={{ width: `${score}%` }} />
+            </div>
+            <div className="mt-5 grid gap-3 md:grid-cols-4">
+              <Metric icon={Activity} label="Trips" value={String(trips.length)} detail={`${uploaded} finalized`} />
+              <Metric icon={Smartphone} label="Devices" value={String(devices.length)} detail="Unique collectors" />
+              <Metric icon={HardDrive} label="Samples" value={samples.toLocaleString()} detail="Stored readings" />
+              <Metric icon={RouteIcon} label="Distance" value={formatDistance(distance)} detail="Reported coverage" />
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="glass-panel">
+          <CardHeader>
+            <CardTitle>System alerts</CardTitle>
+            <CardDescription>What needs attention before the next field session.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
-            {state.loading ? (
-              <p className="text-sm text-muted-foreground">Loading trip activity...</p>
-            ) : recentTrips.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No trips have been uploaded yet.</p>
+            {alerts.length === 0 ? (
+              <AlertRow icon={CheckCircle2} title="No active alerts" detail="Uploads and metadata look clean." />
             ) : (
-              recentTrips.map((trip) => (
-                <div key={trip.trip_id} className="grid gap-2 border border-border bg-secondary/40 p-4 md:grid-cols-[1.2fr_0.8fr_0.6fr]">
-                  <div>
-                    <p className="font-mono text-xs font-medium text-primary">{trip.trip_id}</p>
-                    <p className="mt-1 text-sm font-medium text-foreground">
-                      {trip.device_model ?? 'Unknown device'}
-                    </p>
-                    <p className="text-sm text-muted-foreground">
-                      {trip.operator_name ?? 'Mobile sync'} / {trip.upload_source}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium text-foreground">{formatDate(trip.start_time)}</p>
-                    <p className="text-sm text-muted-foreground">
-                      {trip.total_samples_received.toLocaleString()} samples
-                    </p>
-                  </div>
-                  <div className="flex items-start justify-start md:justify-end">
-                    <Badge variant={statusVariant(trip.status)}>{trip.status}</Badge>
-                  </div>
-                </div>
+              alerts.slice(0, 4).map((alert) => (
+                <AlertRow key={alert.id} icon={AlertTriangle} title={alert.title} detail={alert.detail} />
               ))
             )}
           </CardContent>
         </Card>
+      </div>
 
-        <Card>
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_420px]">
+        <Card className="glass-panel">
           <CardHeader>
-            <CardTitle>Pipeline notes</CardTitle>
-            <CardDescription>Quick operational summary from current records.</CardDescription>
+            <CardTitle>Recent trip timeline</CardTitle>
+            <CardDescription>Latest records reaching the shared backend.</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <SummaryRow label="Samples stored" value={samplesCaptured.toLocaleString()} />
-            <SummaryRow label="Latest upload source" value={recentTrips[0]?.upload_source ?? 'none'} />
-            <SummaryRow label="Trips awaiting review" value={String(uploadIssues)} />
-            <SummaryRow label="Health state" value={state.health} />
+          <CardContent className="space-y-2">
+            {loading ? (
+              <p className="text-sm text-muted-foreground">Loading trips...</p>
+            ) : latestTrips.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No trips uploaded yet.</p>
+            ) : (
+              latestTrips.map((trip) => <TripTimelineItem key={trip.trip_id} trip={trip} />)
+            )}
+          </CardContent>
+        </Card>
+
+        <Card className="glass-panel">
+          <CardHeader>
+            <CardTitle>Device health</CardTitle>
+            <CardDescription>Most recent collection devices by last activity.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {devices.slice(0, 5).map((device) => (
+              <div key={device.id} className="border border-border bg-secondary/40 p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold">{device.model}</p>
+                    <p className="mt-1 truncate font-mono text-xs text-muted-foreground">{device.id}</p>
+                  </div>
+                  <Badge variant={device.status === 'attention' ? 'destructive' : 'outline'}>{device.status}</Badge>
+                </div>
+                <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
+                  <span className="text-muted-foreground">{device.trips} trips</span>
+                  <span className="text-right text-muted-foreground">{device.samples.toLocaleString()} samples</span>
+                </div>
+              </div>
+            ))}
+            {devices.length === 0 ? <p className="text-sm text-muted-foreground">No devices yet.</p> : null}
           </CardContent>
         </Card>
       </div>
@@ -150,52 +146,60 @@ function DashboardOverview() {
   )
 }
 
-function MetricCard({
+function Metric({
+  icon: Icon,
   label,
   value,
   detail,
-  icon: Icon,
 }: {
+  icon: typeof Activity
   label: string
   value: string
   detail: string
-  icon: typeof Activity
 }) {
   return (
-    <Card>
-      <CardContent className="flex items-start justify-between gap-4 py-5">
-        <div>
-          <p className="font-mono text-[11px] uppercase tracking-[0.2em] text-muted-foreground">{label}</p>
-          <p className="mt-3 text-4xl font-semibold tracking-tight text-foreground">{value}</p>
-          <p className="mt-2 text-sm leading-6 text-muted-foreground">{detail}</p>
-        </div>
-        <div className="border border-border bg-secondary p-2">
-          <Icon className="size-5 text-primary" />
-        </div>
-      </CardContent>
-    </Card>
-  )
-}
-
-function SummaryRow({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="border border-border bg-secondary/40 p-4">
-      <p className="font-mono text-[11px] uppercase tracking-[0.2em] text-muted-foreground">{label}</p>
-      <p className="mt-2 text-sm font-medium text-foreground">{value}</p>
+    <div className="border border-border bg-card p-4">
+      <Icon className="size-5 text-muted-foreground" />
+      <p className="mt-4 font-mono text-[11px] uppercase tracking-[0.16em] text-muted-foreground">{label}</p>
+      <p className="mt-2 text-2xl font-semibold">{value}</p>
+      <p className="mt-1 text-sm text-muted-foreground">{detail}</p>
     </div>
   )
 }
 
-function statusVariant(status: string): 'success' | 'warning' | 'destructive' | 'outline' {
-  if (status === 'UPLOADED') return 'success'
-  if (status === 'FAILED') return 'destructive'
-  if (status === 'UPLOADING' || status === 'PENDING') return 'warning'
-  return 'outline'
+function AlertRow({
+  icon: Icon,
+  title,
+  detail,
+}: {
+  icon: typeof AlertTriangle
+  title: string
+  detail: string
+}) {
+  return (
+    <div className="flex gap-3 border border-border bg-secondary/40 p-4">
+      <Icon className="mt-0.5 size-4 text-foreground" />
+      <div>
+        <p className="text-sm font-semibold">{title}</p>
+        <p className="mt-1 text-sm leading-5 text-muted-foreground">{detail}</p>
+      </div>
+    </div>
+  )
 }
 
-function formatDate(value: number) {
-  return new Intl.DateTimeFormat(undefined, {
-    dateStyle: 'medium',
-    timeStyle: 'short',
-  }).format(new Date(value))
+function TripTimelineItem({ trip }: { trip: TripListItem }) {
+  return (
+    <div className="grid gap-3 border border-border bg-card p-4 md:grid-cols-[1fr_160px_120px] md:items-center">
+      <div className="min-w-0">
+        <p className="truncate font-mono text-xs font-semibold">{trip.trip_id}</p>
+        <p className="mt-1 text-sm text-muted-foreground">
+          {trip.device_model ?? 'Unknown device'} / {trip.upload_source}
+        </p>
+      </div>
+      <p className="text-sm text-muted-foreground">{formatDate(trip.start_time)}</p>
+      <Badge variant={trip.status === 'UPLOADED' ? 'success' : trip.status === 'FAILED' ? 'destructive' : 'warning'}>
+        {trip.status}
+      </Badge>
+    </div>
+  )
 }

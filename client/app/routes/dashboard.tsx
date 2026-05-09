@@ -1,9 +1,23 @@
-import { Link, Outlet, createFileRoute } from '@tanstack/react-router'
-import { Activity, LayoutDashboard, Map as MapIcon, RefreshCw, type LucideIcon } from 'lucide-react'
+import { Link, Outlet, createFileRoute, useNavigate } from '@tanstack/react-router'
+import {
+  Activity,
+  Bell,
+  HardDrive,
+  LayoutDashboard,
+  LogOut,
+  Map as MapIcon,
+  RefreshCw,
+  Settings,
+  Smartphone,
+  UploadCloud,
+  type LucideIcon,
+} from 'lucide-react'
+import { useEffect, useState } from 'react'
 
 import { Badge } from '../components/ui/badge'
 import { Button } from '../components/ui/button'
-import { Card } from '../components/ui/card'
+import { fetchCurrentUser, fetchHealth, type UserResponse } from '../lib/api'
+import { clearSession, getStoredUser, isLoggedIn } from '../lib/auth'
 
 export const Route = createFileRoute('/dashboard')({
   component: DashboardLayout,
@@ -12,74 +26,123 @@ export const Route = createFileRoute('/dashboard')({
 const navItems = [
   { to: '/dashboard', label: 'Overview', icon: LayoutDashboard },
   { to: '/dashboard/trips', label: 'Trips', icon: Activity },
+  { to: '/dashboard/devices', label: 'Devices', icon: Smartphone },
   { to: '/dashboard/map', label: 'Coverage', icon: MapIcon },
+  { to: '/dashboard/alerts', label: 'Alerts', icon: Bell },
+  { to: '/dashboard/settings', label: 'Settings', icon: Settings },
 ] as const
 
 function DashboardLayout() {
+  const navigate = useNavigate()
+  const [user, setUser] = useState<UserResponse | null>(() => getStoredUser())
+  const [health, setHealth] = useState('checking')
+
+  useEffect(() => {
+    if (!isLoggedIn()) {
+      void navigate({ to: '/' })
+      return
+    }
+
+    void Promise.all([fetchCurrentUser(), fetchHealth()])
+      .then(([currentUser, healthResponse]) => {
+        setUser(currentUser)
+        setHealth(healthResponse.status)
+      })
+      .catch(() => {
+        clearSession()
+        void navigate({ to: '/' })
+      })
+  }, [navigate])
+
+  function logout() {
+    clearSession()
+    void navigate({ to: '/' })
+  }
+
   return (
-    <div className="px-4 py-4 md:px-6 md:py-6">
-      <div className="mx-auto grid min-h-[calc(100vh-2rem)] max-w-7xl gap-4 lg:grid-cols-[240px_minmax(0,1fr)]">
-        <aside className="section-enter">
-          <Card className="flex h-full flex-col border-sidebar-border bg-sidebar text-sidebar-foreground">
-            <div className="border-b border-sidebar-border px-5 py-5">
-              <Badge className="w-fit border-white/15 bg-sidebar-accent text-white">Workspace</Badge>
-              <h1 className="mt-4 text-2xl font-semibold tracking-tight text-white">Tayenda</h1>
-              <p className="mt-2 text-sm leading-6 text-slate-300">
-                Shared mobile and web trip operations for collection, recovery, and audit.
-              </p>
-            </div>
-
-            <nav className="space-y-1 px-3 py-4">
-              {navItems.map((item) => (
-                <SidebarItem key={item.to} to={item.to} label={item.label} icon={item.icon} />
-              ))}
-            </nav>
-
-            <div className="mt-auto border-t border-sidebar-border px-5 py-5">
-              <div className="border border-sidebar-border bg-sidebar-accent p-4">
-                <p className="font-mono text-[11px] uppercase tracking-[0.2em] text-slate-400">
-                  Active mode
-                </p>
-                <p className="mt-2 text-sm text-white">Live trip sync and manual web import</p>
+    <div className="min-h-screen bg-background/80">
+      <div className="grid min-h-screen lg:grid-cols-[280px_minmax(0,1fr)]">
+        <aside className="hidden min-h-screen flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground lg:flex">
+          <div className="status-line h-1" />
+          <div className="border-b border-sidebar-border px-5 py-5">
+            <div className="flex items-center gap-3">
+              <div className="border border-white/20 bg-white px-2 py-1 text-sm font-bold text-sidebar">
+                TY
+              </div>
+              <div>
+                <p className="text-sm font-semibold">Tayenda</p>
+                <p className="text-xs text-slate-300">Road capture console</p>
               </div>
             </div>
-          </Card>
-        </aside>
-
-        <main className="section-enter min-w-0">
-          <div className="flex h-full flex-col gap-4">
-            <Card className="px-5 py-4">
-              <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-                <div>
-                  <p className="font-mono text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
-                    Malawi road quality operations
-                  </p>
-                  <h2 className="mt-2 text-2xl font-semibold tracking-tight text-foreground">
-                    Operator dashboard
-                  </h2>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  <Badge variant="secondary">Flat web review</Badge>
-                  <Button variant="outline" onClick={() => window.location.reload()}>
-                    <RefreshCw className="size-4" />
-                    Refresh
-                  </Button>
-                </div>
-              </div>
-            </Card>
-
-            <div className="flex gap-2 overflow-x-auto pb-1 lg:hidden">
-              {navItems.map((item) => (
-                <SidebarChip key={item.to} to={item.to} label={item.label} />
-              ))}
-            </div>
-
-            <div className="min-h-0 flex-1">
-              <Outlet />
+            <div className="mt-5 grid grid-cols-2 gap-2">
+              <StatusTile label="API" value={health} />
+              <StatusTile label="Role" value={user?.role ?? 'operator'} />
             </div>
           </div>
+
+          <nav className="space-y-1 p-3">
+            {navItems.map((item) => (
+              <SidebarItem key={item.to} to={item.to} label={item.label} icon={item.icon} />
+            ))}
+          </nav>
+
+          <div className="mt-auto border-t border-sidebar-border p-4">
+            <div className="mb-3 border border-white/10 bg-white/5 p-3">
+              <p className="text-sm font-semibold text-white">{user?.full_name ?? user?.username ?? 'Operator'}</p>
+              <p className="mt-1 text-xs text-slate-300">{user?.email ?? 'Signed in'}</p>
+            </div>
+            <Button variant="secondary" className="w-full" onClick={logout}>
+              <LogOut className="size-4" />
+              Sign out
+            </Button>
+          </div>
+        </aside>
+
+        <main className="min-w-0 px-3 py-3 md:px-6 md:py-5">
+          <div className="mb-4 border border-border bg-card px-4 py-4 lg:hidden">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground">Tayenda</p>
+                <p className="text-sm font-semibold text-foreground">Road capture console</p>
+              </div>
+              <Badge variant={health === 'healthy' ? 'success' : 'warning'}>API {health}</Badge>
+            </div>
+          </div>
+
+          <div className="mb-4 flex flex-col gap-3 border border-border bg-card px-5 py-4 md:flex-row md:items-center md:justify-between">
+            <div>
+              <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+                Live operations
+              </p>
+              <h1 className="mt-1 text-2xl font-semibold tracking-tight">Dashboard</h1>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Badge variant={health === 'healthy' ? 'success' : 'warning'}>API {health}</Badge>
+              <Button variant="outline" onClick={() => window.location.reload()}>
+                <RefreshCw className="size-4" />
+                Refresh
+              </Button>
+            </div>
+          </div>
+
+          <div className="flex gap-2 overflow-x-auto pb-3 lg:hidden">
+            {navItems.map((item) => (
+              <SidebarChip key={item.to} to={item.to} label={item.label} />
+            ))}
+          </div>
+
+          <Outlet />
         </main>
       </div>
+    </div>
+  )
+}
+
+function StatusTile({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="border border-white/15 bg-white/10 p-3">
+      <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-slate-300">{label}</p>
+      <p className="mt-1 truncate text-sm font-semibold text-white">{value}</p>
     </div>
   )
 }
@@ -89,17 +152,17 @@ function SidebarItem({
   icon: Icon,
   label,
 }: {
-  to: '/dashboard' | '/dashboard/map' | '/dashboard/trips'
+  to: '/dashboard' | '/dashboard/map' | '/dashboard/trips' | '/dashboard/devices' | '/dashboard/alerts' | '/dashboard/settings'
   icon: LucideIcon
   label: string
 }) {
   return (
     <Link
       to={to}
-      className="flex items-center gap-3 border px-3 py-3 text-sm transition-colors"
-      activeProps={{ className: 'border-white/10 bg-white text-sidebar' }}
+      className="flex items-center gap-3 border px-3 py-3 text-sm font-medium transition-colors"
+      activeProps={{ className: 'border-white/20 bg-white/12 text-white' }}
       inactiveProps={{
-        className: 'border-transparent text-slate-300 hover:border-white/10 hover:bg-sidebar-accent hover:text-white',
+        className: 'border-transparent text-slate-300 hover:border-white/10 hover:bg-white/8 hover:text-white',
       }}
     >
       <Icon className="size-4" />
@@ -112,14 +175,14 @@ function SidebarChip({
   to,
   label,
 }: {
-  to: '/dashboard' | '/dashboard/map' | '/dashboard/trips'
+  to: '/dashboard' | '/dashboard/map' | '/dashboard/trips' | '/dashboard/devices' | '/dashboard/alerts' | '/dashboard/settings'
   label: string
 }) {
   return (
     <Link
       to={to}
       className="whitespace-nowrap border px-4 py-2 text-sm transition-colors"
-      activeProps={{ className: 'border-primary bg-primary text-primary-foreground' }}
+      activeProps={{ className: 'border-zinc-900 bg-zinc-900 text-white' }}
       inactiveProps={{ className: 'border-border bg-card text-muted-foreground' }}
     >
       {label}

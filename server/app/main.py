@@ -1,19 +1,26 @@
 from contextlib import asynccontextmanager
 from pathlib import Path
+import sys
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from .api import v1
-from .core.config import settings
-from .core.db import engine
-from .models.base import Base
+if __package__ in {None, ""}:
+    sys.path.append(str(Path(__file__).resolve().parent.parent))
+
+from app.api import v1
+from app.core.config import settings
+from app.core.db import SessionLocal, engine
+from app.core.security import ensure_default_operator
+from app.models.base import Base
 
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     Base.metadata.create_all(bind=engine)
     Path(settings.resolved_storage_path).mkdir(parents=True, exist_ok=True)
+    with SessionLocal() as db:
+        ensure_default_operator(db)
     yield
 
 app = FastAPI(

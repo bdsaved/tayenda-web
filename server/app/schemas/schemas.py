@@ -16,6 +16,26 @@ class DeviceResponse(BaseModel):
     status: str
 
 
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+
+class UserResponse(BaseModel):
+    username: str
+    email: str
+    full_name: str | None = None
+    role: str
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class TokenResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    user: UserResponse
+
+
 class TripManifest(BaseModel):
     trip_id: str
     version: str

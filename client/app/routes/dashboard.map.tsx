@@ -1,10 +1,11 @@
 import { createFileRoute } from '@tanstack/react-router'
-import { ChartColumnIncreasing, Layers, MapPin } from 'lucide-react'
+import { Layers, MapPin, Route as RouteIcon } from 'lucide-react'
 import { useEffect, useState } from 'react'
 
 import { Badge } from '../components/ui/badge'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card'
 import { fetchTrips, type TripListItem } from '../lib/api'
+import { formatDistance } from '../lib/dashboard'
 
 export const Route = createFileRoute('/dashboard/map')({
   component: CoveragePage,
@@ -15,114 +16,77 @@ function CoveragePage() {
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    let cancelled = false
-
     fetchTrips()
-      .then((response) => {
-        if (cancelled) return
-        setTrips(response.items)
-      })
-      .catch((loadError) => {
-        if (cancelled) return
-        setError(loadError instanceof Error ? loadError.message : 'Failed to load coverage data')
-      })
-
-    return () => {
-      cancelled = true
-    }
+      .then((response) => setTrips(response.items))
+      .catch((loadError) => setError(loadError instanceof Error ? loadError.message : 'Failed to load coverage data'))
   }, [])
 
   const bySurface = countTrips(trips, (trip) => trip.road_surface ?? 'UNSPECIFIED')
-  const bySource = countTrips(trips, (trip) => trip.upload_source)
+  const byVehicle = countTrips(trips, (trip) => trip.vehicle_type ?? 'UNSPECIFIED')
+  const totalDistance = trips.reduce((sum, trip) => sum + (trip.total_distance ?? 0), 0)
+  const uploaded = trips.filter((trip) => trip.status === 'UPLOADED').length
 
   return (
-    <div className="section-enter space-y-4">
+    <div className="space-y-4">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <Badge className="w-fit">Coverage</Badge>
-          <h2 className="mt-3 text-3xl font-semibold tracking-tight text-foreground">
-            Upload coverage snapshot
-          </h2>
+          <Badge>Coverage</Badge>
+          <h2 className="mt-3 text-3xl font-semibold tracking-tight">Road coverage</h2>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
-            This view uses real uploaded trips to show where collection is coming from and which
-            road-surface groups are represented in the shared dataset.
+            Summary of collected distance, upload sources, road surfaces, and vehicle groups.
           </p>
         </div>
-        <Badge variant="secondary">{trips.length} trips loaded</Badge>
+        <Badge variant="secondary">{uploaded}/{trips.length} finalized</Badge>
       </div>
 
-      {error ? (
-        <Card className="border-rose-300">
-          <CardContent className="py-4 text-sm text-rose-700">{error}</CardContent>
-        </Card>
-      ) : null}
+      {error ? <Card><CardContent className="py-4 text-sm">{error}</CardContent></Card> : null}
 
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.15fr)_minmax(320px,0.85fr)]">
-        <Card className="min-h-[440px]">
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.1fr)_420px]">
+        <Card className="glass-panel">
           <CardHeader>
             <div className="flex items-center gap-2">
-              <MapPin className="size-4 text-primary" />
-              <CardTitle>Coverage board</CardTitle>
+              <MapPin className="size-4" />
+              <CardTitle>Coverage matrix</CardTitle>
             </div>
             <CardDescription>
-              Flat placeholder for the future map layer, already fed by real upload totals.
+              Visual summary until per-sample coordinates are exposed through a map endpoint.
             </CardDescription>
           </CardHeader>
-          <CardContent className="grid h-full gap-4">
-            <div className="grid-dots flex min-h-[260px] items-center justify-center border border-border bg-secondary/30 p-6">
-              <div className="max-w-md text-center">
-                <div className="mx-auto inline-flex border border-border bg-card p-3">
-                  <Layers className="size-5 text-primary" />
-                </div>
-                <p className="mt-4 text-lg font-semibold text-foreground">Map layer ready for live data</p>
-                <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                  The API now exposes shared trip records for mobile sync and manual web upload.
-                  Plugging in MapLibre or Leaflet can happen without changing the storage contract.
-                </p>
+          <CardContent>
+            <div className="grid-dots min-h-[360px] border border-border bg-secondary/30 p-5">
+              <div className="grid h-full min-h-[320px] grid-cols-6 gap-2">
+                {Array.from({ length: 42 }).map((_, index) => {
+                  const active = index < Math.min(42, trips.length * 4)
+                  return (
+                    <div
+                      key={index}
+                      className={active ? 'border border-zinc-900 bg-zinc-900' : 'border border-border bg-card'}
+                    />
+                  )
+                })}
               </div>
             </div>
-
-            <div className="grid gap-3 md:grid-cols-3">
-              <MetricTile label="Uploaded trips" value={String(trips.filter((trip) => trip.status === 'UPLOADED').length)} />
-              <MetricTile label="Mobile sources" value={String(trips.filter((trip) => trip.upload_source === 'mobile').length)} />
-              <MetricTile label="Web sources" value={String(trips.filter((trip) => trip.upload_source === 'web').length)} />
+            <div className="mt-4 grid gap-3 md:grid-cols-3">
+              <Metric label="Distance" value={formatDistance(totalDistance)} />
+              <Metric label="Surfaces" value={String(bySurface.length)} />
+              <Metric label="Vehicles" value={String(byVehicle.length)} />
             </div>
           </CardContent>
         </Card>
 
         <div className="space-y-4">
-          <Card>
+          <Distribution title="Road surfaces" rows={bySurface} total={trips.length} />
+          <Distribution title="Vehicle groups" rows={byVehicle} total={trips.length} />
+          <Card className="glass-panel">
             <CardHeader>
               <div className="flex items-center gap-2">
-                <ChartColumnIncreasing className="size-4 text-primary" />
-                <CardTitle>Road surfaces</CardTitle>
+                <RouteIcon className="size-4" />
+                <CardTitle>Next map upgrade</CardTitle>
               </div>
-              <CardDescription>Trip counts grouped from live metadata.</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-3">
-              {bySurface.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No uploaded trips yet.</p>
-              ) : (
-                bySurface.map(([label, count]) => (
-                  <Row key={label} label={label} value={count} total={trips.length} />
-                ))
-              )}
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Upload source mix</CardTitle>
-              <CardDescription>Shared pipeline split between mobile and web.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {bySource.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No source data available.</p>
-              ) : (
-                bySource.map(([label, count]) => (
-                  <Row key={label} label={label} value={count} total={trips.length} />
-                ))
-              )}
+            <CardContent className="text-sm leading-6 text-muted-foreground">
+              Add an API route that streams downsampled sample coordinates per trip, then render the
+              trace with MapLibre or Leaflet.
             </CardContent>
           </Card>
         </div>
@@ -131,28 +95,38 @@ function CoveragePage() {
   )
 }
 
-function MetricTile({ label, value }: { label: string; value: string }) {
+function Metric({ label, value }: { label: string; value: string }) {
   return (
     <div className="border border-border bg-card p-4">
-      <p className="font-mono text-[11px] uppercase tracking-[0.2em] text-muted-foreground">{label}</p>
-      <p className="mt-2 text-2xl font-semibold tracking-tight text-foreground">{value}</p>
+      <Layers className="size-4 text-muted-foreground" />
+      <p className="mt-3 font-mono text-[11px] uppercase tracking-[0.16em] text-muted-foreground">{label}</p>
+      <p className="mt-2 text-xl font-semibold">{value}</p>
     </div>
   )
 }
 
-function Row({ label, value, total }: { label: string; value: number; total: number }) {
-  const width = total > 0 ? Math.max(8, Math.round((value / total) * 100)) : 0
-
+function Distribution({ title, rows, total }: { title: string; rows: [string, number][]; total: number }) {
   return (
-    <div className="border border-border bg-secondary/40 p-4">
-      <div className="flex items-center justify-between gap-3">
-        <p className="text-sm font-medium text-foreground">{label}</p>
-        <p className="text-sm text-muted-foreground">{value}</p>
-      </div>
-      <div className="mt-3 h-2 border border-border bg-background">
-        <div className="h-full bg-primary" style={{ width: `${width}%` }} />
-      </div>
-    </div>
+    <Card className="glass-panel">
+      <CardHeader>
+        <CardTitle>{title}</CardTitle>
+        <CardDescription>Grouped from uploaded trip metadata.</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {rows.length === 0 ? <p className="text-sm text-muted-foreground">No data yet.</p> : null}
+        {rows.map(([label, count]) => (
+          <div key={label} className="border border-border bg-secondary/40 p-4">
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-sm font-semibold">{label}</p>
+              <p className="text-sm text-muted-foreground">{count}</p>
+            </div>
+            <div className="mt-3 h-2 border border-border bg-card">
+              <div className="h-full bg-zinc-900" style={{ width: `${total > 0 ? Math.max(8, Math.round((count / total) * 100)) : 0}%` }} />
+            </div>
+          </div>
+        ))}
+      </CardContent>
+    </Card>
   )
 }
 

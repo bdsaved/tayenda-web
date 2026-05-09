@@ -22,6 +22,9 @@ services:
       DATABASE_URL: postgresql://user:password@db/tayenda
       SECRET_KEY: supersecretkey
       STORAGE_PATH: /app/storage
+      OPERATOR_USERNAME: admin
+      OPERATOR_PASSWORD: tayenda-admin
+      OPERATOR_EMAIL: admin@tayenda.local
     depends_on:
       - db
 
@@ -33,7 +36,7 @@ services:
     ports:
       - "3000:3000"
     environment:
-      VITE_API_URL: https://strongbox-emphases-uptown.ngrok-free.dev
+      VITE_API_URL: http://localhost:8000
       VITE_PUBLIC_WEB_URL: https://tayenda.renai-labs.com
       VITE_NGROK_URL: https://strongbox-emphases-uptown.ngrok-free.dev
     depends_on:

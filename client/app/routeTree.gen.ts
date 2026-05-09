@@ -15,7 +15,10 @@ import { Route as DashboardImport } from './routes/dashboard'
 import { Route as IndexImport } from './routes/index'
 import { Route as DashboardIndexImport } from './routes/dashboard.index'
 import { Route as DashboardTripsImport } from './routes/dashboard.trips'
+import { Route as DashboardSettingsImport } from './routes/dashboard.settings'
 import { Route as DashboardMapImport } from './routes/dashboard.map'
+import { Route as DashboardDevicesImport } from './routes/dashboard.devices'
+import { Route as DashboardAlertsImport } from './routes/dashboard.alerts'
 
 // Create/Update Routes
 
@@ -43,9 +46,27 @@ const DashboardTripsRoute = DashboardTripsImport.update({
   getParentRoute: () => DashboardRoute,
 } as any)
 
+const DashboardSettingsRoute = DashboardSettingsImport.update({
+  id: '/settings',
+  path: '/settings',
+  getParentRoute: () => DashboardRoute,
+} as any)
+
 const DashboardMapRoute = DashboardMapImport.update({
   id: '/map',
   path: '/map',
+  getParentRoute: () => DashboardRoute,
+} as any)
+
+const DashboardDevicesRoute = DashboardDevicesImport.update({
+  id: '/devices',
+  path: '/devices',
+  getParentRoute: () => DashboardRoute,
+} as any)
+
+const DashboardAlertsRoute = DashboardAlertsImport.update({
+  id: '/alerts',
+  path: '/alerts',
   getParentRoute: () => DashboardRoute,
 } as any)
 
@@ -67,11 +88,32 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DashboardImport
       parentRoute: typeof rootRoute
     }
+    '/dashboard/alerts': {
+      id: '/dashboard/alerts'
+      path: '/alerts'
+      fullPath: '/dashboard/alerts'
+      preLoaderRoute: typeof DashboardAlertsImport
+      parentRoute: typeof DashboardImport
+    }
+    '/dashboard/devices': {
+      id: '/dashboard/devices'
+      path: '/devices'
+      fullPath: '/dashboard/devices'
+      preLoaderRoute: typeof DashboardDevicesImport
+      parentRoute: typeof DashboardImport
+    }
     '/dashboard/map': {
       id: '/dashboard/map'
       path: '/map'
       fullPath: '/dashboard/map'
       preLoaderRoute: typeof DashboardMapImport
+      parentRoute: typeof DashboardImport
+    }
+    '/dashboard/settings': {
+      id: '/dashboard/settings'
+      path: '/settings'
+      fullPath: '/dashboard/settings'
+      preLoaderRoute: typeof DashboardSettingsImport
       parentRoute: typeof DashboardImport
     }
     '/dashboard/trips': {
@@ -94,13 +136,19 @@ declare module '@tanstack/react-router' {
 // Create and export the route tree
 
 interface DashboardRouteChildren {
+  DashboardAlertsRoute: typeof DashboardAlertsRoute
+  DashboardDevicesRoute: typeof DashboardDevicesRoute
   DashboardMapRoute: typeof DashboardMapRoute
+  DashboardSettingsRoute: typeof DashboardSettingsRoute
   DashboardTripsRoute: typeof DashboardTripsRoute
   DashboardIndexRoute: typeof DashboardIndexRoute
 }
 
 const DashboardRouteChildren: DashboardRouteChildren = {
+  DashboardAlertsRoute: DashboardAlertsRoute,
+  DashboardDevicesRoute: DashboardDevicesRoute,
   DashboardMapRoute: DashboardMapRoute,
+  DashboardSettingsRoute: DashboardSettingsRoute,
   DashboardTripsRoute: DashboardTripsRoute,
   DashboardIndexRoute: DashboardIndexRoute,
 }
@@ -112,14 +160,20 @@ const DashboardRouteWithChildren = DashboardRoute._addFileChildren(
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/dashboard': typeof DashboardRouteWithChildren
+  '/dashboard/alerts': typeof DashboardAlertsRoute
+  '/dashboard/devices': typeof DashboardDevicesRoute
   '/dashboard/map': typeof DashboardMapRoute
+  '/dashboard/settings': typeof DashboardSettingsRoute
   '/dashboard/trips': typeof DashboardTripsRoute
   '/dashboard/': typeof DashboardIndexRoute
 }
 
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/dashboard/alerts': typeof DashboardAlertsRoute
+  '/dashboard/devices': typeof DashboardDevicesRoute
   '/dashboard/map': typeof DashboardMapRoute
+  '/dashboard/settings': typeof DashboardSettingsRoute
   '/dashboard/trips': typeof DashboardTripsRoute
   '/dashboard': typeof DashboardIndexRoute
 }
@@ -128,7 +182,10 @@ export interface FileRoutesById {
   __root__: typeof rootRoute
   '/': typeof IndexRoute
   '/dashboard': typeof DashboardRouteWithChildren
+  '/dashboard/alerts': typeof DashboardAlertsRoute
+  '/dashboard/devices': typeof DashboardDevicesRoute
   '/dashboard/map': typeof DashboardMapRoute
+  '/dashboard/settings': typeof DashboardSettingsRoute
   '/dashboard/trips': typeof DashboardTripsRoute
   '/dashboard/': typeof DashboardIndexRoute
 }
@@ -138,16 +195,29 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/dashboard'
+    | '/dashboard/alerts'
+    | '/dashboard/devices'
     | '/dashboard/map'
+    | '/dashboard/settings'
     | '/dashboard/trips'
     | '/dashboard/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/dashboard/map' | '/dashboard/trips' | '/dashboard'
+  to:
+    | '/'
+    | '/dashboard/alerts'
+    | '/dashboard/devices'
+    | '/dashboard/map'
+    | '/dashboard/settings'
+    | '/dashboard/trips'
+    | '/dashboard'
   id:
     | '__root__'
     | '/'
     | '/dashboard'
+    | '/dashboard/alerts'
+    | '/dashboard/devices'
     | '/dashboard/map'
+    | '/dashboard/settings'
     | '/dashboard/trips'
     | '/dashboard/'
   fileRoutesById: FileRoutesById
@@ -183,13 +253,28 @@ export const routeTree = rootRoute
     "/dashboard": {
       "filePath": "dashboard.tsx",
       "children": [
+        "/dashboard/alerts",
+        "/dashboard/devices",
         "/dashboard/map",
+        "/dashboard/settings",
         "/dashboard/trips",
         "/dashboard/"
       ]
     },
+    "/dashboard/alerts": {
+      "filePath": "dashboard.alerts.tsx",
+      "parent": "/dashboard"
+    },
+    "/dashboard/devices": {
+      "filePath": "dashboard.devices.tsx",
+      "parent": "/dashboard"
+    },
     "/dashboard/map": {
       "filePath": "dashboard.map.tsx",
+      "parent": "/dashboard"
+    },
+    "/dashboard/settings": {
+      "filePath": "dashboard.settings.tsx",
       "parent": "/dashboard"
     },
     "/dashboard/trips": {

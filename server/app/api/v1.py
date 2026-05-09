@@ -13,12 +13,15 @@ from sqlalchemy.orm import Session
 
 from ..core.config import settings
 from ..core.db import get_db
-from ..models.models import Chunk, Device, Trip
+from ..core.security import authenticate_user, create_access_token, decode_token
+from ..models.models import Chunk, Device, Trip, User
 from ..schemas.schemas import (
     ChunkResponse,
     DeviceRegister,
     DeviceResponse,
     FinalizeResponse,
+    LoginRequest,
+    TokenResponse,
     TripChunk,
     TripDetailResponse,
     TripFinalize,
@@ -27,6 +30,7 @@ from ..schemas.schemas import (
     TripManifest,
     TripResponse,
     UploadStatusResponse,
+    UserResponse,
     WebTripUploadResponse,
 )
 
@@ -94,6 +98,22 @@ def require_device(db: Session, x_api_key: str | None) -> Device:
     if device is None:
         raise HTTPException(status_code=401, detail="Invalid API key")
     return device
+
+
+def require_operator(
+    authorization: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+) -> User:
+    if not authorization or not authorization.lower().startswith("bearer "):
+        raise HTTPException(status_code=401, detail="Missing bearer token")
+    token = authorization.split(" ", 1)[1].strip()
+    username = decode_token(token)
+    if username is None:
+        raise HTTPException(status_code=401, detail="Invalid bearer token")
+    user = db.query(User).filter(User.username == username, User.is_active.is_(True)).first()
+    if user is None:
+        raise HTTPException(status_code=401, detail="Operator account not found")
+    return user
 
 
 def recompute_trip_progress(trip: Trip, db: Session) -> tuple[int, int]:
@@ -249,6 +269,19 @@ def parse_samples_file(filename: str | None, content: bytes) -> list[dict[str, A
 @router.get("/health")
 def api_health() -> dict[str, str]:
     return {"status": "healthy"}
+
+
+@router.post("/auth/login", response_model=TokenResponse)
+def login(login_in: LoginRequest, db: Session = Depends(get_db)) -> TokenResponse:
+    user = authenticate_user(db, login_in.username, login_in.password)
+    if user is None:
+        raise HTTPException(status_code=401, detail="Invalid username or password")
+    return TokenResponse(access_token=create_access_token(user.username), user=UserResponse.model_validate(user))
+
+
+@router.get("/auth/me", response_model=UserResponse)
+def current_user(user: User = Depends(require_operator)) -> UserResponse:
+    return UserResponse.model_validate(user)
 
 
 @router.post("/devices/register", response_model=DeviceResponse)
@@ -430,6 +463,7 @@ def finalize_trip(
 def list_trips(
     q: str | None = Query(default=None),
     db: Session = Depends(get_db),
+    _: User = Depends(require_operator),
 ) -> TripListResponse:
     query = db.query(Trip).order_by(Trip.start_time.desc())
     if q:
@@ -444,7 +478,11 @@ def list_trips(
 
 
 @router.get("/trips/{trip_id}", response_model=TripDetailResponse)
-def get_trip(trip_id: str, db: Session = Depends(get_db)) -> TripDetailResponse:
+def get_trip(
+    trip_id: str,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_operator),
+) -> TripDetailResponse:
     trip = db.query(Trip).filter(Trip.trip_id == trip_id).first()
     if trip is None:
         raise HTTPException(status_code=404, detail="Trip not found")
@@ -501,6 +539,7 @@ async def upload_trip_from_web(
     notes: str | None = Form(default=None),
     sample_file: UploadFile = File(...),
     db: Session = Depends(get_db),
+    _: User = Depends(require_operator),
 ) -> WebTripUploadResponse:
     resolved_trip_id = trip_id or f"web-{uuid.uuid4()}"
     file_bytes = await sample_file.read()

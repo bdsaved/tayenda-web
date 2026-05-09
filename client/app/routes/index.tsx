@@ -1,100 +1,126 @@
-import { createFileRoute, Link } from '@tanstack/react-router'
-import { ArrowRight, Database, FileUp, Smartphone } from 'lucide-react'
+import { createFileRoute, useNavigate } from '@tanstack/react-router'
+import { ArrowRight, LockKeyhole, Server, Smartphone, UploadCloud } from 'lucide-react'
+import { type FormEvent, useState } from 'react'
 
 import { Badge } from '../components/ui/badge'
 import { Button } from '../components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
-import { getApiBaseUrl } from '../lib/api'
+import { Input } from '../components/ui/input'
+import { getApiBaseUrl, loginOperator } from '../lib/api'
+import { storeSession } from '../lib/auth'
 
 export const Route = createFileRoute('/')({
-  component: HomePage,
+  component: LoginPage,
 })
 
-const workflow = [
-  {
-    title: 'Mobile capture',
-    detail: 'Android devices register once, send manifests, upload chunks, and finalize trips safely.',
-    icon: Smartphone,
-  },
-  {
-    title: 'Web intake',
-    detail: 'Operators can upload trip files directly with the required metadata when field sync needs intervention.',
-    icon: FileUp,
-  },
-  {
-    title: 'Shared records',
-    detail: 'The dashboard reads the same trip states the mobile workflow writes, so review stays consistent.',
-    icon: Database,
-  },
-] as const
+function LoginPage() {
+  const navigate = useNavigate()
+  const [username, setUsername] = useState('admin')
+  const [password, setPassword] = useState('tayenda-admin')
+  const [error, setError] = useState<string | null>(null)
+  const [submitting, setSubmitting] = useState(false)
 
-function HomePage() {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    setSubmitting(true)
+    setError(null)
+
+    try {
+      const session = await loginOperator(username, password)
+      storeSession(session.access_token, session.user)
+      await navigate({ to: '/dashboard' })
+    } catch (loginError) {
+      setError(loginError instanceof Error ? loginError.message : 'Login failed')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
   return (
-    <main className="px-4 py-4 md:px-6 md:py-6">
-      <div className="mx-auto grid min-h-[calc(100vh-2rem)] max-w-7xl gap-6 lg:grid-cols-[1.05fr_0.95fr]">
-        <section className="section-enter flex flex-col justify-between border border-border bg-card p-8 md:p-10">
-          <div className="space-y-6">
-            <Badge className="w-fit">Tayenda Sync Console</Badge>
-            <div className="space-y-4">
-              <h1 className="max-w-3xl text-4xl font-semibold tracking-tight text-foreground md:text-6xl">
-                Clean web review for the same trip pipeline the mobile app uses.
+    <main className="min-h-screen">
+      <div className="grid min-h-screen lg:grid-cols-2">
+        <section className="order-2 flex border-t border-border bg-card p-6 md:p-10 lg:order-1 lg:border-t-0 lg:border-r">
+          <div className="flex w-full max-w-2xl flex-col justify-between">
+            <div>
+              <Badge className="w-fit">Tayenda Operations</Badge>
+              <h1 className="mt-8 text-4xl font-semibold tracking-tight text-foreground md:text-5xl lg:text-6xl">
+                Road capture command center for device fleets and trip intelligence.
               </h1>
-              <p className="max-w-2xl text-base leading-7 text-muted-foreground">
-                The web workspace now mirrors the manifest, chunk upload, finalize, and audit states
-                used by the Android client. Operators can also import trip files manually when they
-                need to complete a handoff from end to end.
+              <p className="mt-5 max-w-xl text-base leading-7 text-muted-foreground">
+                Monitor field collection quality, synchronize uploads, and surface readiness signals
+                from one focused operations surface.
               </p>
             </div>
-          </div>
 
-          <div className="mt-10 flex flex-wrap gap-3">
-            <Button asChild>
-              <Link to="/dashboard">
-                Open workspace
-                <ArrowRight className="size-4" />
-              </Link>
-            </Button>
-            <Button asChild variant="outline">
-              <a href={`${getApiBaseUrl()}/openapi.json`} target="_blank" rel="noreferrer">
-                API schema
-              </a>
-            </Button>
+            <div className="mt-10 grid gap-3 md:grid-cols-3">
+              <Capability icon={Smartphone} label="Devices" value="Sync health" />
+              <Capability icon={UploadCloud} label="Uploads" value="Chunk status" />
+              <Capability icon={Server} label="API" value={getApiBaseUrl()} />
+            </div>
           </div>
         </section>
 
-        <section className="section-enter grid gap-4">
-          {workflow.map(({ title, detail, icon: Icon }) => (
-            <Card key={title}>
-              <CardHeader className="pb-0">
-                <div className="flex items-center justify-between">
-                  <CardTitle>{title}</CardTitle>
-                  <div className="border border-border bg-secondary p-2">
-                    <Icon className="size-4 text-primary" />
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent className="pt-4">
-                <p className="text-sm leading-6 text-muted-foreground">{detail}</p>
-              </CardContent>
-            </Card>
-          ))}
-
-          <Card className="grid-dots">
-            <CardContent className="p-6">
-              <p className="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">
-                Upload contract
-              </p>
-              <div className="mt-4 space-y-2 text-sm text-foreground">
-                <p><code>POST /api/v1/devices/register</code></p>
-                <p><code>POST /api/v1/trips/manifest</code></p>
-                <p><code>POST /api/v1/trips/&#123;tripId&#125;/chunks</code></p>
-                <p><code>POST /api/v1/trips/&#123;tripId&#125;/finalize</code></p>
-                <p><code>POST /api/v1/web/trips/upload</code></p>
+        <section className="order-1 flex bg-background px-4 py-6 md:px-8 md:py-8 lg:order-2 lg:p-10">
+          <div className="m-auto w-full max-w-md border border-border bg-card p-6 shadow-[0_18px_48px_rgba(15,23,42,0.09)] md:p-8">
+            <div className="mb-7 flex items-center gap-3">
+              <div className="border border-border bg-secondary p-3">
+                <LockKeyhole className="size-5 text-foreground" />
               </div>
-            </CardContent>
-          </Card>
+              <div>
+                <h2 className="text-2xl font-semibold tracking-tight">Operator Login</h2>
+                <p className="text-sm text-muted-foreground">Use the backend operator account.</p>
+              </div>
+            </div>
+
+            {error ? (
+              <div className="mb-4 border border-zinc-500 bg-zinc-900 px-4 py-3 text-sm text-white">
+                {error}
+              </div>
+            ) : null}
+
+            <form className="space-y-4" onSubmit={handleSubmit}>
+              <label className="space-y-2 text-sm font-medium">
+                <span>Username</span>
+                <Input value={username} onChange={(event) => setUsername(event.target.value)} required />
+              </label>
+              <label className="space-y-2 text-sm font-medium">
+                <span>Password</span>
+                <Input
+                  type="password"
+                  value={password}
+                  onChange={(event) => setPassword(event.target.value)}
+                  required
+                />
+              </label>
+              <Button type="submit" className="w-full" disabled={submitting}>
+                {submitting ? 'Signing in...' : 'Open dashboard'}
+                <ArrowRight className="size-4" />
+              </Button>
+            </form>
+
+            <p className="mt-4 text-xs leading-5 text-muted-foreground">
+              Default local account: admin / tayenda-admin. Change OPERATOR_PASSWORD before deployment.
+            </p>
+          </div>
         </section>
       </div>
     </main>
+  )
+}
+
+function Capability({
+  icon: Icon,
+  label,
+  value,
+}: {
+  icon: typeof Smartphone
+  label: string
+  value: string
+}) {
+  return (
+    <div className="border border-border bg-background p-4">
+      <Icon className="size-5 text-muted-foreground" />
+      <p className="mt-4 text-sm font-semibold text-foreground">{label}</p>
+      <p className="mt-1 truncate text-sm text-muted-foreground">{value}</p>
+    </div>
   )
 }

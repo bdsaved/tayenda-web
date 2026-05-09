@@ -16,6 +16,9 @@ class Settings(BaseSettings):
     WEB_CLIENT_ORIGIN: str = "http://localhost:3000"
     PUBLIC_WEB_ORIGIN: str = "https://tayenda.renai-labs.com"
     NGROK_ORIGIN: str = "https://strongbox-emphases-uptown.ngrok-free.dev"
+    OPERATOR_USERNAME: str = "admin"
+    OPERATOR_PASSWORD: str = "tayenda-admin"
+    OPERATOR_EMAIL: str = "admin@tayenda.local"
     IRI_THRESHOLD_POOR: float = 4.0
     IRI_THRESHOLD_FAIR: float = 2.0
 

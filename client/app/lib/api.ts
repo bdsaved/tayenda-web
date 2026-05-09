@@ -39,12 +39,27 @@ export type WebTripUploadResponse = {
   artifact_path: string | null
 }
 
+export type UserResponse = {
+  username: string
+  email: string
+  full_name: string | null
+  role: string
+}
+
+export type LoginResponse = {
+  access_token: string
+  token_type: 'bearer'
+  user: UserResponse
+}
+
 const API_BASE_URL = (import.meta.env.VITE_API_URL ?? 'http://localhost:8000').replace(/\/$/, '')
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const token = typeof window === 'undefined' ? null : window.localStorage.getItem('tayenda.operator.token')
   const response = await fetch(`${API_BASE_URL}${path}`, {
     ...init,
     headers: {
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...(init?.headers ?? {}),
     },
   })
@@ -67,6 +82,18 @@ export function getTripDownloadUrl(tripId: string) {
 
 export async function fetchHealth() {
   return request<HealthResponse>('/api/v1/health')
+}
+
+export async function loginOperator(username: string, password: string) {
+  return request<LoginResponse>('/api/v1/auth/login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username, password }),
+  })
+}
+
+export async function fetchCurrentUser() {
+  return request<UserResponse>('/api/v1/auth/me')
 }
 
 export async function fetchTrips(query?: string) {

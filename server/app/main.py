@@ -1,6 +1,7 @@
 from contextlib import asynccontextmanager
 from pathlib import Path
 import sys
+import asyncio
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -10,18 +11,21 @@ if __package__ in {None, ""}:
 
 from app.api import v1
 from app.core.config import settings
-from app.core.db import SessionLocal, engine
-from app.core.security import ensure_default_operator
-from app.models.base import Base
+from app.core.processing import run_processing_loop
 
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
-    Base.metadata.create_all(bind=engine)
     Path(settings.resolved_storage_path).mkdir(parents=True, exist_ok=True)
-    with SessionLocal() as db:
-        ensure_default_operator(db)
+    stop_event = asyncio.Event()
+    processing_task = asyncio.create_task(run_processing_loop(stop_event))
     yield
+    stop_event.set()
+    processing_task.cancel()
+    try:
+        await processing_task
+    except asyncio.CancelledError:
+        pass
 
 app = FastAPI(
     title=settings.PROJECT_NAME,

@@ -21,6 +21,8 @@ class Settings(BaseSettings):
     OPERATOR_EMAIL: str = "admin@tayenda.local"
     IRI_THRESHOLD_POOR: float = 4.0
     IRI_THRESHOLD_FAIR: float = 2.0
+    PROCESS_INTERVAL_SECONDS: int = 120
+    RAW_RETENTION_DAYS: int = 30
 
     model_config = SettingsConfigDict(env_file=str(BASE_DIR / ".env"), extra="ignore")
 

@@ -6,6 +6,7 @@ import {
   LayoutDashboard,
   LogOut,
   Map as MapIcon,
+  BarChart3,
   RefreshCw,
   Settings,
   Smartphone,
@@ -28,6 +29,7 @@ const navItems = [
   { to: '/dashboard/trips', label: 'Trips', icon: Activity },
   { to: '/dashboard/devices', label: 'Devices', icon: Smartphone },
   { to: '/dashboard/map', label: 'Coverage', icon: MapIcon },
+  { to: '/dashboard/analysis', label: 'Analysis', icon: BarChart3 },
   { to: '/dashboard/alerts', label: 'Alerts', icon: Bell },
   { to: '/dashboard/settings', label: 'Settings', icon: Settings },
 ] as const
@@ -152,7 +154,14 @@ function SidebarItem({
   icon: Icon,
   label,
 }: {
-  to: '/dashboard' | '/dashboard/map' | '/dashboard/trips' | '/dashboard/devices' | '/dashboard/alerts' | '/dashboard/settings'
+  to:
+    | '/dashboard'
+    | '/dashboard/map'
+    | '/dashboard/analysis'
+    | '/dashboard/trips'
+    | '/dashboard/devices'
+    | '/dashboard/alerts'
+    | '/dashboard/settings'
   icon: LucideIcon
   label: string
 }) {
@@ -175,7 +184,14 @@ function SidebarChip({
   to,
   label,
 }: {
-  to: '/dashboard' | '/dashboard/map' | '/dashboard/trips' | '/dashboard/devices' | '/dashboard/alerts' | '/dashboard/settings'
+  to:
+    | '/dashboard'
+    | '/dashboard/map'
+    | '/dashboard/analysis'
+    | '/dashboard/trips'
+    | '/dashboard/devices'
+    | '/dashboard/alerts'
+    | '/dashboard/settings'
   label: string
 }) {
   return (

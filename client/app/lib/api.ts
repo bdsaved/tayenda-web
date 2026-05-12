@@ -46,6 +46,43 @@ export type UserResponse = {
   role: string
 }
 
+export type RoadAnalysisRow = {
+  road_surface: string
+  trips: number
+  distance_km: number
+  samples: number
+}
+
+export type RoadAnalysisResponse = {
+  total_trips: number
+  total_distance_km: number
+  rows: RoadAnalysisRow[]
+}
+
+export type TracePoint = {
+  lat: number
+  lon: number
+}
+
+export type TripTrace = {
+  trip_id: string
+  road_surface: string
+  points: TracePoint[]
+}
+
+export type RoadTraceResponse = {
+  traces: TripTrace[]
+}
+
+export type ProcessingHealthResponse = {
+  status: string
+  interval_seconds: number
+  last_run_at: number | null
+  next_run_at: number | null
+  processed_trips_last_run: number
+  cleaned_files_last_run: number
+}
+
 export type LoginResponse = {
   access_token: string
   token_type: 'bearer'
@@ -106,4 +143,16 @@ export async function uploadWebTrip(formData: FormData) {
     method: 'POST',
     body: formData,
   })
+}
+
+export async function fetchRoadsAnalysis() {
+  return request<RoadAnalysisResponse>('/api/v1/analytics/roads')
+}
+
+export async function fetchRoadTraces(limit = 25, step = 15) {
+  return request<RoadTraceResponse>(`/api/v1/analytics/road-traces?limit=${limit}&step=${step}`)
+}
+
+export async function fetchProcessingHealth() {
+  return request<ProcessingHealthResponse>('/api/v1/analytics/processing-health')
 }

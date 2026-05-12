@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 
 from ..core.config import settings
 from ..core.db import get_db
+from ..core.processing import get_processing_health
 from ..core.security import authenticate_user, create_access_token, decode_token
 from ..models.models import Chunk, Device, Trip, User
 from ..schemas.schemas import (
@@ -21,7 +22,13 @@ from ..schemas.schemas import (
     DeviceResponse,
     FinalizeResponse,
     LoginRequest,
+    ProcessingHealthResponse,
+    RoadAnalysisResponse,
+    RoadAnalysisRow,
+    RoadTraceResponse,
+    TracePoint,
     TokenResponse,
+    TripTrace,
     TripChunk,
     TripDetailResponse,
     TripFinalize,
@@ -459,6 +466,57 @@ def finalize_trip(
     )
 
 
+@router.post("/trips/{trip_id}/gzip", response_model=WebTripUploadResponse)
+async def upload_trip_gzip(
+    trip_id: str,
+    file: UploadFile = File(...),
+    total_samples: int = Form(default=0),
+    db: Session = Depends(get_db),
+    x_api_key: str | None = Header(default=None),
+) -> WebTripUploadResponse:
+    device = require_device(db, x_api_key)
+
+    trip = db.query(Trip).filter(Trip.trip_id == trip_id).first()
+    if trip is None:
+        raise HTTPException(status_code=404, detail="Trip not found")
+    if trip.device_id != device.hashed_device_id:
+        raise HTTPException(status_code=403, detail="Trip does not belong to the authenticated device")
+
+    file_name = (file.filename or "trip.ndjson.gz").lower()
+    if not file_name.endswith(".gz"):
+        raise HTTPException(status_code=400, detail="Expected a .gz payload")
+
+    payload = await file.read()
+    if not payload:
+        raise HTTPException(status_code=400, detail="Uploaded gzip payload is empty")
+
+    storage_dir = trip_storage_dir(trip_id)
+    gzip_path = storage_dir / "trip.ndjson.gz"
+    gzip_path.write_bytes(payload)
+
+    existing_chunks = db.query(Chunk).filter(Chunk.trip_id == trip.trip_id).all()
+    for existing_chunk in existing_chunks:
+        db.delete(existing_chunk)
+
+    trip.upload_source = "mobile"
+    trip.total_chunks_expected = 1
+    trip.total_chunks_received = 1
+    trip.total_samples_received = max(total_samples, 0)
+    trip.total_samples = max(trip.total_samples, max(total_samples, 0))
+    trip.status = "STORED"
+    trip.artifact_path = str(gzip_path)
+
+    db.commit()
+
+    return WebTripUploadResponse(
+        trip_id=trip.trip_id,
+        status="stored",
+        chunks_received=1,
+        samples_received=trip.total_samples_received,
+        artifact_path=str(gzip_path),
+    )
+
+
 @router.get("/trips", response_model=TripListResponse)
 def list_trips(
     q: str | None = Query(default=None),
@@ -475,6 +533,117 @@ def list_trips(
             | Trip.device_id.ilike(pattern)
         )
     return TripListResponse(items=[trip_to_summary(trip) for trip in query.all()])
+
+
+@router.get("/analytics/roads", response_model=RoadAnalysisResponse)
+def get_roads_analysis(
+    db: Session = Depends(get_db),
+    _: User = Depends(require_operator),
+) -> RoadAnalysisResponse:
+    trips = db.query(Trip).all()
+
+    grouped: dict[str, dict[str, float | int]] = {}
+    total_distance_m = 0.0
+
+    for trip in trips:
+        road_surface = (trip.road_surface or "UNSPECIFIED").upper()
+        distance_m = float(trip.total_distance or 0.0)
+        samples = int(trip.total_samples_received or 0)
+
+        if road_surface not in grouped:
+            grouped[road_surface] = {
+                "trips": 0,
+                "distance_m": 0.0,
+                "samples": 0,
+            }
+
+        grouped[road_surface]["trips"] = int(grouped[road_surface]["trips"]) + 1
+        grouped[road_surface]["distance_m"] = float(grouped[road_surface]["distance_m"]) + distance_m
+        grouped[road_surface]["samples"] = int(grouped[road_surface]["samples"]) + samples
+        total_distance_m += distance_m
+
+    rows = [
+        RoadAnalysisRow(
+            road_surface=road_surface,
+            trips=int(values["trips"]),
+            distance_km=round(float(values["distance_m"]) / 1000.0, 2),
+            samples=int(values["samples"]),
+        )
+        for road_surface, values in grouped.items()
+    ]
+    rows.sort(key=lambda row: row.distance_km, reverse=True)
+
+    return RoadAnalysisResponse(
+        total_trips=len(trips),
+        total_distance_km=round(total_distance_m / 1000.0, 2),
+        rows=rows,
+    )
+
+
+@router.get("/analytics/road-traces", response_model=RoadTraceResponse)
+def get_road_traces(
+    limit: int = Query(default=25, ge=1, le=200),
+    step: int = Query(default=15, ge=1, le=200),
+    db: Session = Depends(get_db),
+    _: User = Depends(require_operator),
+) -> RoadTraceResponse:
+    trips = (
+        db.query(Trip)
+        .filter(Trip.status == "UPLOADED")
+        .order_by(Trip.start_time.desc())
+        .limit(limit)
+        .all()
+    )
+
+    traces: list[TripTrace] = []
+    for trip in trips:
+        trip_dir = trip_storage_dir(trip.trip_id)
+        gzip_path = trip_dir / "trip.ndjson.gz"
+        if not gzip_path.exists():
+            continue
+
+        points: list[TracePoint] = []
+        with gzip.open(gzip_path, mode="rt", encoding="utf-8") as fp:
+            for idx, line in enumerate(fp):
+                if idx % step != 0:
+                    continue
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    item = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                lat = item.get("lat")
+                lon = item.get("lon")
+                if isinstance(lat, (int, float)) and isinstance(lon, (int, float)):
+                    points.append(TracePoint(lat=float(lat), lon=float(lon)))
+
+        if points:
+            traces.append(
+                TripTrace(
+                    trip_id=trip.trip_id,
+                    road_surface=(trip.road_surface or "UNSPECIFIED").upper(),
+                    points=points,
+                )
+            )
+
+    return RoadTraceResponse(traces=traces)
+
+
+@router.get("/analytics/processing-health", response_model=ProcessingHealthResponse)
+def processing_health(
+    _: User = Depends(require_operator),
+) -> ProcessingHealthResponse:
+    health = get_processing_health()
+    return ProcessingHealthResponse(
+        status=str(health.get("status", "idle")),
+        interval_seconds=int(health.get("interval_seconds", settings.PROCESS_INTERVAL_SECONDS)),
+        last_run_at=health.get("last_run_at"),
+        next_run_at=health.get("next_run_at"),
+        processed_trips_last_run=int(health.get("processed_trips_last_run", 0)),
+        cleaned_files_last_run=int(health.get("cleaned_files_last_run", 0)),
+    )
 
 
 @router.get("/trips/{trip_id}", response_model=TripDetailResponse)

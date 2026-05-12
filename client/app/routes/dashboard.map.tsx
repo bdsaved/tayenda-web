@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 
 import { Badge } from '../components/ui/badge'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card'
-import { fetchTrips, type TripListItem } from '../lib/api'
+import { fetchProcessingHealth, fetchRoadTraces, fetchTrips, type ProcessingHealthResponse, type TripListItem, type TripTrace } from '../lib/api'
 import { formatDistance } from '../lib/dashboard'
 
 export const Route = createFileRoute('/dashboard/map')({
@@ -13,12 +13,22 @@ export const Route = createFileRoute('/dashboard/map')({
 
 function CoveragePage() {
   const [trips, setTrips] = useState<TripListItem[]>([])
+  const [traces, setTraces] = useState<TripTrace[]>([])
+  const [processingHealth, setProcessingHealth] = useState<ProcessingHealthResponse | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     fetchTrips()
       .then((response) => setTrips(response.items))
       .catch((loadError) => setError(loadError instanceof Error ? loadError.message : 'Failed to load coverage data'))
+
+    fetchRoadTraces()
+      .then((response) => setTraces(response.traces))
+      .catch(() => undefined)
+
+    fetchProcessingHealth()
+      .then((response) => setProcessingHealth(response))
+      .catch(() => undefined)
   }, [])
 
   const bySurface = countTrips(trips, (trip) => trip.road_surface ?? 'UNSPECIFIED')
@@ -46,25 +56,15 @@ function CoveragePage() {
           <CardHeader>
             <div className="flex items-center gap-2">
               <MapPin className="size-4" />
-              <CardTitle>Coverage matrix</CardTitle>
+              <CardTitle>Recorded road traces</CardTitle>
             </div>
             <CardDescription>
-              Visual summary until per-sample coordinates are exposed through a map endpoint.
+              Downsampled GPS traces from uploaded trips.
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="grid-dots min-h-[360px] border border-border bg-secondary/30 p-5">
-              <div className="grid h-full min-h-[320px] grid-cols-6 gap-2">
-                {Array.from({ length: 42 }).map((_, index) => {
-                  const active = index < Math.min(42, trips.length * 4)
-                  return (
-                    <div
-                      key={index}
-                      className={active ? 'border border-zinc-900 bg-zinc-900' : 'border border-border bg-card'}
-                    />
-                  )
-                })}
-              </div>
+            <div className="min-h-[360px] border border-border bg-secondary/30 p-3">
+              <TraceCanvas traces={traces} />
             </div>
             <div className="mt-4 grid gap-3 md:grid-cols-3">
               <Metric label="Distance" value={formatDistance(totalDistance)} />
@@ -81,17 +81,58 @@ function CoveragePage() {
             <CardHeader>
               <div className="flex items-center gap-2">
                 <RouteIcon className="size-4" />
-                <CardTitle>Next map upgrade</CardTitle>
+                <CardTitle>Processing health</CardTitle>
               </div>
             </CardHeader>
             <CardContent className="text-sm leading-6 text-muted-foreground">
-              Add an API route that streams downsampled sample coordinates per trip, then render the
-              trace with MapLibre or Leaflet.
+              {processingHealth ? (
+                <div className="space-y-1">
+                  <div>Status: {processingHealth.status}</div>
+                  <div>Interval: {processingHealth.interval_seconds}s</div>
+                  <div>Processed last run: {processingHealth.processed_trips_last_run}</div>
+                  <div>Cleaned raw files: {processingHealth.cleaned_files_last_run}</div>
+                  <div>
+                    Next run: {processingHealth.next_run_at ? formatDate(processingHealth.next_run_at) : 'N/A'}
+                  </div>
+                </div>
+              ) : (
+                'Processing health not available.'
+              )}
             </CardContent>
           </Card>
         </div>
       </div>
     </div>
+  )
+}
+
+function TraceCanvas({ traces }: { traces: TripTrace[] }) {
+  if (traces.length === 0) {
+    return <div className="flex h-[320px] items-center justify-center text-sm text-muted-foreground">No trace data yet.</div>
+  }
+
+  const points = traces.flatMap((trace) => trace.points)
+  const minLat = Math.min(...points.map((p) => p.lat))
+  const maxLat = Math.max(...points.map((p) => p.lat))
+  const minLon = Math.min(...points.map((p) => p.lon))
+  const maxLon = Math.max(...points.map((p) => p.lon))
+  const latRange = Math.max(0.00001, maxLat - minLat)
+  const lonRange = Math.max(0.00001, maxLon - minLon)
+
+  return (
+    <svg viewBox="0 0 1000 500" className="h-[320px] w-full border border-border bg-card">
+      {traces.map((trace, idx) => {
+        const poly = trace.points
+          .map((p) => {
+            const x = ((p.lon - minLon) / lonRange) * 1000
+            const y = 500 - ((p.lat - minLat) / latRange) * 500
+            return `${x.toFixed(2)},${y.toFixed(2)}`
+          })
+          .join(' ')
+        const color = `hsl(${(idx * 47) % 360} 75% 42%)`
+        return <polyline key={trace.trip_id} points={poly} fill="none" stroke={color} strokeWidth="2" />
+      })}
+    </svg>
   )
 }
 
@@ -137,4 +178,11 @@ function countTrips(trips: TripListItem[], getKey: (trip: TripListItem) => strin
     groups.set(key, (groups.get(key) ?? 0) + 1)
   }
   return [...groups.entries()].sort((a, b) => b[1] - a[1])
+}
+
+function formatDate(value: number) {
+  return new Intl.DateTimeFormat(undefined, {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  }).format(new Date(value))
 }

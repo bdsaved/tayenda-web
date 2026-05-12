@@ -18,6 +18,7 @@ import { Route as DashboardTripsImport } from './routes/dashboard.trips'
 import { Route as DashboardSettingsImport } from './routes/dashboard.settings'
 import { Route as DashboardMapImport } from './routes/dashboard.map'
 import { Route as DashboardDevicesImport } from './routes/dashboard.devices'
+import { Route as DashboardAnalysisImport } from './routes/dashboard.analysis'
 import { Route as DashboardAlertsImport } from './routes/dashboard.alerts'
 
 // Create/Update Routes
@@ -64,6 +65,12 @@ const DashboardDevicesRoute = DashboardDevicesImport.update({
   getParentRoute: () => DashboardRoute,
 } as any)
 
+const DashboardAnalysisRoute = DashboardAnalysisImport.update({
+  id: '/analysis',
+  path: '/analysis',
+  getParentRoute: () => DashboardRoute,
+} as any)
+
 const DashboardAlertsRoute = DashboardAlertsImport.update({
   id: '/alerts',
   path: '/alerts',
@@ -93,6 +100,13 @@ declare module '@tanstack/react-router' {
       path: '/alerts'
       fullPath: '/dashboard/alerts'
       preLoaderRoute: typeof DashboardAlertsImport
+      parentRoute: typeof DashboardImport
+    }
+    '/dashboard/analysis': {
+      id: '/dashboard/analysis'
+      path: '/analysis'
+      fullPath: '/dashboard/analysis'
+      preLoaderRoute: typeof DashboardAnalysisImport
       parentRoute: typeof DashboardImport
     }
     '/dashboard/devices': {
@@ -137,6 +151,7 @@ declare module '@tanstack/react-router' {
 
 interface DashboardRouteChildren {
   DashboardAlertsRoute: typeof DashboardAlertsRoute
+  DashboardAnalysisRoute: typeof DashboardAnalysisRoute
   DashboardDevicesRoute: typeof DashboardDevicesRoute
   DashboardMapRoute: typeof DashboardMapRoute
   DashboardSettingsRoute: typeof DashboardSettingsRoute
@@ -146,6 +161,7 @@ interface DashboardRouteChildren {
 
 const DashboardRouteChildren: DashboardRouteChildren = {
   DashboardAlertsRoute: DashboardAlertsRoute,
+  DashboardAnalysisRoute: DashboardAnalysisRoute,
   DashboardDevicesRoute: DashboardDevicesRoute,
   DashboardMapRoute: DashboardMapRoute,
   DashboardSettingsRoute: DashboardSettingsRoute,
@@ -161,6 +177,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/dashboard': typeof DashboardRouteWithChildren
   '/dashboard/alerts': typeof DashboardAlertsRoute
+  '/dashboard/analysis': typeof DashboardAnalysisRoute
   '/dashboard/devices': typeof DashboardDevicesRoute
   '/dashboard/map': typeof DashboardMapRoute
   '/dashboard/settings': typeof DashboardSettingsRoute
@@ -171,6 +188,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/dashboard/alerts': typeof DashboardAlertsRoute
+  '/dashboard/analysis': typeof DashboardAnalysisRoute
   '/dashboard/devices': typeof DashboardDevicesRoute
   '/dashboard/map': typeof DashboardMapRoute
   '/dashboard/settings': typeof DashboardSettingsRoute
@@ -183,6 +201,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/dashboard': typeof DashboardRouteWithChildren
   '/dashboard/alerts': typeof DashboardAlertsRoute
+  '/dashboard/analysis': typeof DashboardAnalysisRoute
   '/dashboard/devices': typeof DashboardDevicesRoute
   '/dashboard/map': typeof DashboardMapRoute
   '/dashboard/settings': typeof DashboardSettingsRoute
@@ -196,6 +215,7 @@ export interface FileRouteTypes {
     | '/'
     | '/dashboard'
     | '/dashboard/alerts'
+    | '/dashboard/analysis'
     | '/dashboard/devices'
     | '/dashboard/map'
     | '/dashboard/settings'
@@ -205,6 +225,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/dashboard/alerts'
+    | '/dashboard/analysis'
     | '/dashboard/devices'
     | '/dashboard/map'
     | '/dashboard/settings'
@@ -215,6 +236,7 @@ export interface FileRouteTypes {
     | '/'
     | '/dashboard'
     | '/dashboard/alerts'
+    | '/dashboard/analysis'
     | '/dashboard/devices'
     | '/dashboard/map'
     | '/dashboard/settings'
@@ -254,6 +276,7 @@ export const routeTree = rootRoute
       "filePath": "dashboard.tsx",
       "children": [
         "/dashboard/alerts",
+        "/dashboard/analysis",
         "/dashboard/devices",
         "/dashboard/map",
         "/dashboard/settings",
@@ -263,6 +286,10 @@ export const routeTree = rootRoute
     },
     "/dashboard/alerts": {
       "filePath": "dashboard.alerts.tsx",
+      "parent": "/dashboard"
+    },
+    "/dashboard/analysis": {
+      "filePath": "dashboard.analysis.tsx",
       "parent": "/dashboard"
     },
     "/dashboard/devices": {

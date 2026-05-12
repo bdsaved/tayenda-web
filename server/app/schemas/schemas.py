@@ -141,3 +141,40 @@ class WebTripUploadResponse(BaseModel):
     chunks_received: int
     samples_received: int
     artifact_path: str | None = None
+
+
+class RoadAnalysisRow(BaseModel):
+    road_surface: str
+    trips: int
+    distance_km: float
+    samples: int
+
+
+class RoadAnalysisResponse(BaseModel):
+    total_trips: int
+    total_distance_km: float
+    rows: list[RoadAnalysisRow]
+
+
+class TracePoint(BaseModel):
+    lat: float
+    lon: float
+
+
+class TripTrace(BaseModel):
+    trip_id: str
+    road_surface: str
+    points: list[TracePoint]
+
+
+class RoadTraceResponse(BaseModel):
+    traces: list[TripTrace]
+
+
+class ProcessingHealthResponse(BaseModel):
+    status: str
+    interval_seconds: int
+    last_run_at: int | None = None
+    next_run_at: int | None = None
+    processed_trips_last_run: int
+    cleaned_files_last_run: int

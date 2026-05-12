@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 import uuid
 
-from sqlalchemy import BigInteger, Boolean, DateTime, Float, ForeignKey, Integer, JSON, String, UniqueConstraint
+from sqlalchemy import BigInteger, Boolean, DateTime, Float, ForeignKey, Index, Integer, JSON, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from .base import Base
@@ -40,6 +40,11 @@ class Device(Base):
 
 class Trip(Base):
     __tablename__ = "trips"
+    __table_args__ = (
+        Index("ix_trips_status", "status"),
+        Index("ix_trips_start_time", "start_time"),
+        Index("ix_trips_road_surface", "road_surface"),
+    )
 
     trip_id: Mapped[str] = mapped_column(String, primary_key=True)
     server_trip_id: Mapped[str] = mapped_column(String, default=lambda: f"srv_{uuid.uuid4().hex}", nullable=False)

@@ -472,7 +472,9 @@ function handleFileChange(setFile: (file: File | null) => void) {
 function statusVariant(status: string): 'success' | 'warning' | 'destructive' | 'outline' {
   if (status === 'UPLOADED') return 'success'
   if (status === 'FAILED') return 'destructive'
-  if (status === 'UPLOADING' || status === 'PENDING') return 'warning'
+  if (status === 'UPLOADING' || status === 'PENDING' || status === 'STORED' || status === 'PROCESSING') {
+    return 'warning'
+  }
   return 'outline'
 }
 

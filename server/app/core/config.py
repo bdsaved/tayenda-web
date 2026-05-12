@@ -22,7 +22,7 @@ class Settings(BaseSettings):
     IRI_THRESHOLD_POOR: float = 4.0
     IRI_THRESHOLD_FAIR: float = 2.0
 
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+    model_config = SettingsConfigDict(env_file=str(BASE_DIR / ".env"), extra="ignore")
 
     @property
     def resolved_storage_path(self) -> Path:

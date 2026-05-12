@@ -52,7 +52,7 @@ export type LoginResponse = {
   user: UserResponse
 }
 
-const API_BASE_URL = (import.meta.env.VITE_API_URL ?? 'http://localhost:8000').replace(/\/$/, '')
+const API_BASE_URL = (import.meta.env.VITE_API_URL ?? 'http://localhost:8080').replace(/\/$/, '')
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const token = typeof window === 'undefined' ? null : window.localStorage.getItem('tayenda.operator.token')

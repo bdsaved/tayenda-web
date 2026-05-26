@@ -12,7 +12,7 @@ services:
 
   server:
     build: ./server
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000
     volumes:
       - ./server:/app
       - uploads_data:/app/storage
@@ -24,21 +24,17 @@ services:
       STORAGE_PATH: /app/storage
       OPERATOR_USERNAME: admin
       OPERATOR_PASSWORD: tayenda-admin
-      OPERATOR_EMAIL: admin@tayenda.local
+      OPERATOR_EMAIL: brenalddzonzi@gmail.com
     depends_on:
       - db
 
   client:
     build: ./client
-    volumes:
-      - ./client:/app
-      - /app/node_modules
     ports:
-      - "3000:3000"
+      - "3001:3000"
     environment:
-      VITE_API_URL: http://localhost:8000
+      VITE_API_URL: https://api.tayenda.renai-labs.com
       VITE_PUBLIC_WEB_URL: https://tayenda.renai-labs.com
-      VITE_NGROK_URL: https://strongbox-emphases-uptown.ngrok-free.dev
     depends_on:
       - server
 

@@ -25,6 +25,7 @@ services:
       OPERATOR_USERNAME: admin
       OPERATOR_PASSWORD: tayenda-admin
       OPERATOR_EMAIL: brenalddzonzi@gmail.com
+      PUBLIC_WEB_ORIGIN: https://tayenda.renai-labs.com
     depends_on:
       - db
 

@@ -11,12 +11,27 @@ if __package__ in {None, ""}:
 
 from app.api import v1
 from app.core.config import settings
+from app.core.db import SessionLocal, engine
 from app.core.processing import run_processing_loop
+from app.core.security import ensure_default_operator
+from app.models.base import Base
+from app.models import models  # noqa: F401  (register mappers before create_all)
 
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     Path(settings.resolved_storage_path).mkdir(parents=True, exist_ok=True)
+
+    # Ensure the schema exists and a login-able operator account is present so the
+    # API is usable immediately on a fresh database. create_all is idempotent and
+    # only fills in missing tables, so it is safe alongside Alembic migrations.
+    Base.metadata.create_all(bind=engine)
+    db = SessionLocal()
+    try:
+        ensure_default_operator(db)
+    finally:
+        db.close()
+
     stop_event = asyncio.Event()
     processing_task = asyncio.create_task(run_processing_loop(stop_event))
     yield

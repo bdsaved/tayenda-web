@@ -89,7 +89,9 @@ export type LoginResponse = {
   user: UserResponse
 }
 
-const API_BASE_URL = (import.meta.env.VITE_API_URL ?? 'http://localhost:8080').replace(/\/$/, '')
+// Set VITE_API_URL in client/.env. Falls back to the local server (port 8000,
+// matching uvicorn/docker-compose). The live API is https://api.tayenda.renai-labs.com
+const API_BASE_URL = (import.meta.env.VITE_API_URL ?? 'http://localhost:8000').replace(/\/$/, '')
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const token = typeof window === 'undefined' ? null : window.localStorage.getItem('tayenda.operator.token')

@@ -1,51 +1,80 @@
-import sys
-import os
-from sqlalchemy.orm import Session
-from passlib.context import CryptContext
-import uuid
+"""Seed operator accounts.
 
-# Add the current directory to sys.path to allow importing from app
+The default operator (from OPERATOR_USERNAME / OPERATOR_PASSWORD) is created
+automatically at API startup via ensure_default_operator(). This script seeds an
+additional named admin and can be run manually:
+
+    python -m scripts.seed            # from web/server/
+
+It uses the same pbkdf2_sha256 hasher the API verifies against
+(app.core.security.get_password_hash) — NOT bcrypt/passlib — so seeded accounts
+can actually log in.
+"""
+import os
+import sys
+
+from sqlalchemy.orm import Session
+
+# Allow importing the `app` package when run directly.
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from app.models.models import User
 from app.core.db import SessionLocal
+from app.core.security import ensure_default_operator, get_password_hash
+from app.models.models import User
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+def _extra_admins() -> list[dict]:
+    """Optional named admin, configured entirely via env vars.
 
-def get_password_hash(password):
-    return pwd_context.hash(password)
+    No credentials are hardcoded. Set SEED_ADMIN_USERNAME and
+    SEED_ADMIN_PASSWORD to seed an additional admin; otherwise only the
+    default operator is ensured.
+    """
+    username = os.getenv("SEED_ADMIN_USERNAME")
+    password = os.getenv("SEED_ADMIN_PASSWORD")
+    if not username or not password:
+        return []
+    return [
+        {
+            "username": username,
+            "email": os.getenv("SEED_ADMIN_EMAIL", f"{username}@tayenda.renai-labs.com"),
+            "password": password,
+            "full_name": os.getenv("SEED_ADMIN_FULL_NAME", "Tayenda Administrator"),
+            "role": "admin",
+        }
+    ]
 
-def seed_users():
+
+def seed_users() -> None:
     db: Session = SessionLocal()
     try:
-        # Admin user for tayenda.renai-labs.com
-        admin_username = "rflmwcom"
-        admin_email = "admin@tayenda.renai-labs.com"
-        admin_password = "8-18Zfyd9;YYAe"
-        
-        # Check if user already exists
-        user = db.query(User).filter(User.username == admin_username).first()
-        if not user:
-            print(f"Creating admin user: {admin_username}")
-            admin_user = User(
-                username=admin_username,
-                email=admin_email,
-                password_hash=get_password_hash(admin_password),
-                full_name="Tayenda Malawi Administrator",
-                role="admin",
-                is_active=True
+        # Guarantee the configured default operator exists too.
+        ensure_default_operator(db)
+
+        for admin in _extra_admins():
+            existing = db.query(User).filter(User.username == admin["username"]).first()
+            if existing is not None:
+                print(f"[=] admin already exists: {admin['username']}")
+                continue
+
+            db.add(
+                User(
+                    username=admin["username"],
+                    email=admin["email"],
+                    password_hash=get_password_hash(admin["password"]),
+                    full_name=admin["full_name"],
+                    role=admin["role"],
+                    is_active=True,
+                )
             )
-            db.add(admin_user)
             db.commit()
-            print("✓ Admin user created successfully")
-        else:
-            print("⚠ Admin user already exists")
-            
-    except Exception as e:
-        print(f"Error seeding database: {e}")
+            print(f"[+] created admin: {admin['username']}")
+    except Exception as exc:  # noqa: BLE001 - surface seeding errors to the operator
         db.rollback()
+        print(f"[!] error seeding database: {exc}")
+        raise
     finally:
         db.close()
+
 
 if __name__ == "__main__":
     seed_users()

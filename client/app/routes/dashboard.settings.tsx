@@ -17,7 +17,7 @@ function SettingsPage() {
     <div className="space-y-4">
       <div>
         <Badge>Settings</Badge>
-        <h2 className="mt-3 text-3xl font-semibold tracking-tight">Deployment and access</h2>
+        <h2 className="mt-3 font-display text-3xl font-semibold tracking-tight">Deployment and access</h2>
         <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
           Current runtime details and the deployment decision for API/client packaging.
         </p>
@@ -66,9 +66,11 @@ function InfoCard({
   return (
     <Card className="glass-panel">
       <CardContent className="py-5">
-        <Icon className="size-5 text-muted-foreground" />
+        <div className="inline-flex rounded-lg bg-accent p-2.5 text-primary">
+          <Icon className="size-5" />
+        </div>
         <p className="mt-4 font-mono text-[11px] uppercase tracking-[0.16em] text-muted-foreground">{title}</p>
-        <p className="mt-2 break-words text-lg font-semibold">{value}</p>
+        <p className="mt-2 break-words font-display text-lg font-semibold">{value}</p>
         <p className="mt-1 text-sm text-muted-foreground">{detail}</p>
       </CardContent>
     </Card>

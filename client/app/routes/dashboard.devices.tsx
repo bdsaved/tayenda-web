@@ -28,7 +28,7 @@ function DevicesPage() {
       <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
         <div>
           <Badge>Devices</Badge>
-          <h2 className="mt-3 text-3xl font-semibold tracking-tight">Collector fleet</h2>
+          <h2 className="mt-3 font-display text-3xl font-semibold tracking-tight">Collector fleet</h2>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
             Device-level view of recent activity, samples, trip count, and sync attention state.
           </p>
@@ -36,7 +36,7 @@ function DevicesPage() {
         <Badge variant="secondary">{devices.length} devices</Badge>
       </div>
 
-      {error ? <Card><CardContent className="py-4 text-sm">{error}</CardContent></Card> : null}
+      {error ? <Card className="border-destructive/30 bg-destructive/5"><CardContent className="py-4 text-sm text-[hsl(2_70%_42%)]">{error}</CardContent></Card> : null}
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         {devices.map((device) => (
@@ -44,7 +44,7 @@ function DevicesPage() {
             <CardHeader>
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <div className="mb-4 inline-flex border border-border bg-secondary p-3">
+                  <div className="mb-4 inline-flex rounded-xl bg-accent p-3 text-primary">
                     <Smartphone className="size-5" />
                   </div>
                   <CardTitle className="truncate">{device.model}</CardTitle>
@@ -77,9 +77,9 @@ function DevicesPage() {
 
 function DeviceStat({ icon: Icon, label, value }: { icon: typeof Signal; label: string; value: string }) {
   return (
-    <div className="flex items-center justify-between gap-4 border border-border bg-secondary/40 p-3">
+    <div className="flex items-center justify-between gap-4 rounded-lg border border-border bg-secondary/40 p-3">
       <div className="flex items-center gap-2 text-sm text-muted-foreground">
-        <Icon className="size-4" />
+        <Icon className="size-4 text-primary" />
         <span>{label}</span>
       </div>
       <span className="text-right text-sm font-semibold">{value}</span>

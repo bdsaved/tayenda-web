@@ -35,7 +35,7 @@ function RoadAnalysisPage() {
       <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <Badge>Analysis</Badge>
-          <h2 className="mt-3 text-3xl font-semibold tracking-tight">Recorded roads</h2>
+          <h2 className="mt-3 font-display text-3xl font-semibold tracking-tight">Recorded roads</h2>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
             Aggregated server-side summary of road surfaces captured by field trips.
           </p>
@@ -44,8 +44,8 @@ function RoadAnalysisPage() {
       </div>
 
       {error ? (
-        <Card>
-          <CardContent className="py-4 text-sm text-foreground">{error}</CardContent>
+        <Card className="border-destructive/30 bg-destructive/5">
+          <CardContent className="py-4 text-sm text-[hsl(2_70%_42%)]">{error}</CardContent>
         </Card>
       ) : null}
 
@@ -68,7 +68,7 @@ function RoadAnalysisPage() {
           {rows.map((row) => {
             const width = totalDistanceKm > 0 ? Math.max(8, Math.round((row.distance_km / totalDistanceKm) * 100)) : 0
             return (
-              <div key={row.road_surface} className="border border-border bg-secondary/40 p-4">
+              <div key={row.road_surface} className="rounded-xl border border-border bg-secondary/40 p-4">
                 <div className="flex items-start justify-between gap-4">
                   <div>
                     <p className="text-sm font-semibold">{prettySurface(row.road_surface)}</p>
@@ -108,7 +108,7 @@ function Metric({ title, value }: { title: string; value: string }) {
     <Card className="glass-panel">
       <CardContent className="pt-6">
         <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-muted-foreground">{title}</p>
-        <p className="mt-2 text-2xl font-semibold">{value}</p>
+        <p className="mt-2 font-display text-2xl font-semibold">{value}</p>
       </CardContent>
     </Card>
   )

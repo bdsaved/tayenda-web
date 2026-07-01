@@ -154,7 +154,7 @@ function TripsPage() {
       <div className="flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
         <div>
           <Badge className="w-fit">Trips</Badge>
-          <h2 className="mt-3 text-3xl font-semibold tracking-tight text-foreground">
+          <h2 className="mt-3 font-display text-3xl font-semibold tracking-tight text-foreground">
             Live audit and upload
           </h2>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
@@ -170,9 +170,9 @@ function TripsPage() {
       </div>
 
       {(error || uploadMessage) ? (
-        <Card className={error ? 'border-rose-300' : 'border-emerald-300'}>
+        <Card className={error ? 'border-destructive/30 bg-destructive/5' : 'border-success/30 bg-success/5'}>
           <CardContent className="py-4 text-sm">
-            <span className={error ? 'text-rose-700' : 'text-emerald-700'}>{error ?? uploadMessage}</span>
+            <span className={error ? 'text-[hsl(2_70%_42%)]' : 'text-[hsl(152_68%_28%)]'}>{error ?? uploadMessage}</span>
           </CardContent>
         </Card>
       ) : null}
@@ -456,9 +456,9 @@ function SelectField({
 
 function StatBox({ label, value }: { label: string; value: string }) {
   return (
-    <div className="border border-border bg-card px-4 py-3">
+    <div className="rounded-xl border border-border bg-card px-4 py-3">
       <p className="font-mono text-[11px] uppercase tracking-[0.2em] text-muted-foreground">{label}</p>
-      <p className="mt-2 text-xl font-semibold text-foreground">{value}</p>
+      <p className="mt-2 font-display text-xl font-semibold text-foreground">{value}</p>
     </div>
   )
 }

@@ -41,7 +41,7 @@ function CoveragePage() {
       <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <Badge>Coverage</Badge>
-          <h2 className="mt-3 text-3xl font-semibold tracking-tight">Road coverage</h2>
+          <h2 className="mt-3 font-display text-3xl font-semibold tracking-tight">Road coverage</h2>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
             Summary of collected distance, upload sources, road surfaces, and vehicle groups.
           </p>
@@ -49,7 +49,7 @@ function CoveragePage() {
         <Badge variant="secondary">{uploaded}/{trips.length} finalized</Badge>
       </div>
 
-      {error ? <Card><CardContent className="py-4 text-sm">{error}</CardContent></Card> : null}
+      {error ? <Card className="border-destructive/30 bg-destructive/5"><CardContent className="py-4 text-sm text-[hsl(2_70%_42%)]">{error}</CardContent></Card> : null}
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1.1fr)_420px]">
         <Card className="glass-panel">
@@ -63,7 +63,7 @@ function CoveragePage() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="min-h-[360px] border border-border bg-secondary/30 p-3">
+            <div className="min-h-[360px] rounded-xl border border-border bg-secondary/30 p-3">
               <TraceCanvas traces={traces} />
             </div>
             <div className="mt-4 grid gap-3 md:grid-cols-3">
@@ -120,7 +120,7 @@ function TraceCanvas({ traces }: { traces: TripTrace[] }) {
   const lonRange = Math.max(0.00001, maxLon - minLon)
 
   return (
-    <svg viewBox="0 0 1000 500" className="h-[320px] w-full border border-border bg-card">
+    <svg viewBox="0 0 1000 500" className="h-[320px] w-full rounded-lg border border-border bg-card">
       {traces.map((trace, idx) => {
         const poly = trace.points
           .map((p) => {
@@ -129,7 +129,7 @@ function TraceCanvas({ traces }: { traces: TripTrace[] }) {
             return `${x.toFixed(2)},${y.toFixed(2)}`
           })
           .join(' ')
-        const color = `hsl(${(idx * 47) % 360} 75% 42%)`
+        const color = `hsl(${150 + ((idx * 23) % 60)} 70% 42%)`
         return <polyline key={trace.trip_id} points={poly} fill="none" stroke={color} strokeWidth="2" />
       })}
     </svg>
@@ -138,10 +138,10 @@ function TraceCanvas({ traces }: { traces: TripTrace[] }) {
 
 function Metric({ label, value }: { label: string; value: string }) {
   return (
-    <div className="border border-border bg-card p-4">
-      <Layers className="size-4 text-muted-foreground" />
+    <div className="rounded-xl border border-border bg-secondary/40 p-4">
+      <Layers className="size-4 text-primary" />
       <p className="mt-3 font-mono text-[11px] uppercase tracking-[0.16em] text-muted-foreground">{label}</p>
-      <p className="mt-2 text-xl font-semibold">{value}</p>
+      <p className="mt-2 font-display text-xl font-semibold">{value}</p>
     </div>
   )
 }

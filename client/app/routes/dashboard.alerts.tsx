@@ -26,19 +26,19 @@ function AlertsPage() {
     <div className="space-y-4">
       <div>
         <Badge>Alerts</Badge>
-        <h2 className="mt-3 text-3xl font-semibold tracking-tight">Troubleshooting queue</h2>
+        <h2 className="mt-3 font-display text-3xl font-semibold tracking-tight">Troubleshooting queue</h2>
         <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
           A practical checklist for sync failures, short captures, and missing trip metadata.
         </p>
       </div>
 
-      {error ? <Card><CardContent className="py-4 text-sm">{error}</CardContent></Card> : null}
+      {error ? <Card className="border-destructive/30 bg-destructive/5"><CardContent className="py-4 text-sm text-[hsl(2_70%_42%)]">{error}</CardContent></Card> : null}
 
       <div className="grid gap-4 xl:grid-cols-2">
         {alerts.length === 0 ? (
           <Card className="glass-panel xl:col-span-2">
             <CardContent className="flex gap-3 py-8">
-              <CheckCircle2 className="size-5" />
+              <CheckCircle2 className="size-5 text-primary" />
               <div>
                 <p className="font-semibold">No active alerts</p>
                 <p className="mt-1 text-sm text-muted-foreground">The current trip set has no obvious operational issues.</p>
@@ -51,7 +51,7 @@ function AlertsPage() {
               <CardHeader>
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex gap-3">
-                    <AlertTriangle className="mt-1 size-5" />
+                    <AlertTriangle className={`mt-1 size-5 ${alert.severity === 'critical' ? 'text-destructive' : 'text-[hsl(38_92%_42%)]'}`} />
                     <div>
                       <CardTitle>{alert.title}</CardTitle>
                       <CardDescription>{alert.detail}</CardDescription>

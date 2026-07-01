@@ -78,8 +78,8 @@ function RoadAnalysisPage() {
                     <p className="text-sm font-semibold">{row.distance_km.toFixed(1)} km</p>
                   </div>
                 </div>
-                <div className="mt-3 h-2 border border-border bg-card">
-                  <div className="h-full bg-zinc-900" style={{ width: `${width}%` }} />
+                <div className="mt-3 h-2 overflow-hidden rounded-full border border-border bg-secondary">
+                  <div className="brand-gradient h-full rounded-full transition-[width] duration-700" style={{ width: `${width}%` }} />
                 </div>
               </div>
             )

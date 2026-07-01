@@ -38,41 +38,51 @@ function LoginPage() {
   return (
     <main className="min-h-screen">
       <div className="grid min-h-screen lg:grid-cols-2">
-        <section className="order-2 flex border-t border-border bg-card p-6 md:p-10 lg:order-1 lg:border-t-0 lg:border-r">
-          <div className="flex w-full max-w-2xl flex-col justify-between">
+        <section className="brand-gradient relative order-2 flex overflow-hidden p-6 text-white md:p-10 lg:order-1">
+          <div className="pointer-events-none absolute inset-0 grid-dots opacity-30" />
+          <div className="pointer-events-none absolute -right-24 -top-24 size-72 rounded-full bg-white/10 blur-3xl" />
+          <div className="relative flex w-full max-w-2xl flex-col justify-between">
             <div>
-              <Badge className="w-fit">Tayenda Operations</Badge>
-              <h1 className="mt-8 text-4xl font-semibold tracking-tight text-foreground md:text-5xl lg:text-6xl">
-                Road capture command center for device fleets and trip intelligence.
+              <div className="flex items-center gap-3">
+                <div className="flex size-11 items-center justify-center rounded-xl bg-white/15 text-lg font-bold backdrop-blur">
+                  T
+                </div>
+                <span className="font-display text-lg font-semibold tracking-tight">Tayenda</span>
+              </div>
+              <p className="mt-10 inline-flex items-center gap-2 rounded-full border border-white/25 bg-white/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em]">
+                <span className="size-1.5 rounded-full bg-white live-dot" /> Resilience &amp; green mobility
+              </p>
+              <h1 className="mt-6 font-display text-4xl font-semibold leading-[1.05] tracking-tight md:text-5xl lg:text-6xl">
+                Every journey becomes live road intelligence.
               </h1>
-              <p className="mt-5 max-w-xl text-base leading-7 text-muted-foreground">
-                Monitor field collection quality, synchronize uploads, and surface readiness signals
-                from one focused operations surface.
+              <p className="mt-5 max-w-xl text-base leading-7 text-white/85">
+                Map potholes, rough roads, and flood-prone routes across Malawi&apos;s communities —
+                then plan safer, greener, more reliable mobility from one operations surface.
               </p>
             </div>
 
             <div className="mt-10 grid gap-3 md:grid-cols-3">
               <Capability icon={Smartphone} label="Devices" value="Sync health" />
               <Capability icon={UploadCloud} label="Uploads" value="Chunk status" />
-              <Capability icon={Server} label="API" value={getApiBaseUrl()} />
+              <Capability icon={Server} label="API" value={getApiBaseUrl().replace(/^https?:\/\//, '')} />
             </div>
           </div>
         </section>
 
         <section className="order-1 flex bg-background px-4 py-6 md:px-8 md:py-8 lg:order-2 lg:p-10">
-          <div className="m-auto w-full max-w-md border border-border bg-card p-6 shadow-[0_18px_48px_rgba(15,23,42,0.09)] md:p-8">
+          <div className="glass-panel m-auto w-full max-w-md p-6 md:p-8">
             <div className="mb-7 flex items-center gap-3">
-              <div className="border border-border bg-secondary p-3">
-                <LockKeyhole className="size-5 text-foreground" />
+              <div className="flex size-11 items-center justify-center rounded-xl bg-accent text-accent-foreground">
+                <LockKeyhole className="size-5" />
               </div>
               <div>
-                <h2 className="text-2xl font-semibold tracking-tight">Operator Login</h2>
+                <h2 className="font-display text-2xl font-semibold tracking-tight">Operator Login</h2>
                 <p className="text-sm text-muted-foreground">Use the backend operator account.</p>
               </div>
             </div>
 
             {error ? (
-              <div className="mb-4 border border-zinc-500 bg-zinc-900 px-4 py-3 text-sm text-white">
+              <div className="mb-4 rounded-lg border border-destructive/25 bg-destructive/10 px-4 py-3 text-sm text-[hsl(2_70%_42%)]">
                 {error}
               </div>
             ) : null}
@@ -117,10 +127,10 @@ function Capability({
   value: string
 }) {
   return (
-    <div className="border border-border bg-background p-4">
-      <Icon className="size-5 text-muted-foreground" />
-      <p className="mt-4 text-sm font-semibold text-foreground">{label}</p>
-      <p className="mt-1 truncate text-sm text-muted-foreground">{value}</p>
+    <div className="rounded-xl border border-white/15 bg-white/10 p-4 backdrop-blur">
+      <Icon className="size-5 text-white/80" />
+      <p className="mt-4 text-sm font-semibold text-white">{label}</p>
+      <p className="mt-1 truncate text-sm text-white/70">{value}</p>
     </div>
   )
 }

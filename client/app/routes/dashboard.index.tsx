@@ -48,8 +48,8 @@ function DashboardOverview() {
   return (
     <div className="space-y-4">
       {error ? (
-        <Card className="border-zinc-900">
-          <CardContent className="py-4 text-sm text-foreground">{error}</CardContent>
+        <Card className="border-destructive/30 bg-destructive/5">
+          <CardContent className="py-4 text-sm text-[hsl(2_70%_42%)]">{error}</CardContent>
         </Card>
       ) : null}
 
@@ -64,15 +64,15 @@ function DashboardOverview() {
                   One operational score from finalized trips, metadata completeness, and upload health.
                 </CardDescription>
               </div>
-              <div className="border border-border bg-secondary px-5 py-4 text-right">
-                <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground">Score</p>
-                <p className="mt-1 text-4xl font-semibold">{score}%</p>
+              <div className="rounded-xl border border-primary/15 bg-accent px-5 py-4 text-right">
+                <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-primary/70">Score</p>
+                <p className="mt-1 font-display text-4xl font-semibold text-primary">{score}%</p>
               </div>
             </div>
           </CardHeader>
           <CardContent>
-            <div className="h-3 border border-border bg-background">
-              <div className="h-full bg-zinc-900" style={{ width: `${score}%` }} />
+            <div className="h-3 overflow-hidden rounded-full border border-border bg-secondary">
+              <div className="brand-gradient h-full rounded-full transition-[width] duration-700" style={{ width: `${score}%` }} />
             </div>
             <div className="mt-5 grid gap-3 md:grid-cols-4">
               <Metric icon={Activity} label="Trips" value={String(trips.length)} detail={`${uploaded} finalized`} />
@@ -124,7 +124,7 @@ function DashboardOverview() {
           </CardHeader>
           <CardContent className="space-y-3">
             {devices.slice(0, 5).map((device) => (
-              <div key={device.id} className="border border-border bg-secondary/40 p-4">
+              <div key={device.id} className="rounded-xl border border-border bg-secondary/40 p-4">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <p className="truncate text-sm font-semibold">{device.model}</p>
@@ -158,10 +158,12 @@ function Metric({
   detail: string
 }) {
   return (
-    <div className="border border-border bg-card p-4">
-      <Icon className="size-5 text-muted-foreground" />
+    <div className="rounded-xl border border-border bg-secondary/40 p-4 transition-colors hover:border-primary/30 hover:bg-accent/40">
+      <div className="flex size-9 items-center justify-center rounded-lg bg-accent text-primary">
+        <Icon className="size-5" />
+      </div>
       <p className="mt-4 font-mono text-[11px] uppercase tracking-[0.16em] text-muted-foreground">{label}</p>
-      <p className="mt-2 text-2xl font-semibold">{value}</p>
+      <p className="mt-2 font-display text-2xl font-semibold">{value}</p>
       <p className="mt-1 text-sm text-muted-foreground">{detail}</p>
     </div>
   )
@@ -177,8 +179,8 @@ function AlertRow({
   detail: string
 }) {
   return (
-    <div className="flex gap-3 border border-border bg-secondary/40 p-4">
-      <Icon className="mt-0.5 size-4 text-foreground" />
+    <div className="flex gap-3 rounded-xl border border-border bg-secondary/40 p-4">
+      <Icon className="mt-0.5 size-4 shrink-0 text-primary" />
       <div>
         <p className="text-sm font-semibold">{title}</p>
         <p className="mt-1 text-sm leading-5 text-muted-foreground">{detail}</p>
@@ -189,7 +191,7 @@ function AlertRow({
 
 function TripTimelineItem({ trip }: { trip: TripListItem }) {
   return (
-    <div className="grid gap-3 border border-border bg-card p-4 md:grid-cols-[1fr_160px_120px] md:items-center">
+    <div className="grid gap-3 rounded-xl border border-border bg-secondary/30 p-4 transition-colors hover:border-primary/30 md:grid-cols-[1fr_160px_120px] md:items-center">
       <div className="min-w-0">
         <p className="truncate font-mono text-xs font-semibold">{trip.trip_id}</p>
         <p className="mt-1 text-sm text-muted-foreground">

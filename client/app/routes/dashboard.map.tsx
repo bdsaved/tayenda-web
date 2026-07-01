@@ -156,13 +156,13 @@ function Distribution({ title, rows, total }: { title: string; rows: [string, nu
       <CardContent className="space-y-3">
         {rows.length === 0 ? <p className="text-sm text-muted-foreground">No data yet.</p> : null}
         {rows.map(([label, count]) => (
-          <div key={label} className="border border-border bg-secondary/40 p-4">
+          <div key={label} className="rounded-xl border border-border bg-secondary/40 p-4">
             <div className="flex items-center justify-between gap-3">
               <p className="text-sm font-semibold">{label}</p>
               <p className="text-sm text-muted-foreground">{count}</p>
             </div>
-            <div className="mt-3 h-2 border border-border bg-card">
-              <div className="h-full bg-zinc-900" style={{ width: `${total > 0 ? Math.max(8, Math.round((count / total) * 100)) : 0}%` }} />
+            <div className="mt-3 h-2 overflow-hidden rounded-full border border-border bg-secondary">
+              <div className="brand-gradient h-full rounded-full transition-[width] duration-700" style={{ width: `${total > 0 ? Math.max(8, Math.round((count / total) * 100)) : 0}%` }} />
             </div>
           </div>
         ))}

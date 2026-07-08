@@ -3,7 +3,7 @@ services:
     image: postgres:16
     restart: unless-stopped
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - ./.data/postgres:/var/lib/postgresql/data
     environment:
       POSTGRES_DB: tayenda
       POSTGRES_USER: user
@@ -62,5 +62,4 @@ services:
       - server
 
 volumes:
-  postgres_data:
   uploads_data:

@@ -3,10 +3,38 @@
 :80 {
   encode gzip zstd
 
-  reverse_proxy /api/* server:8000
-  reverse_proxy /docs* server:8000
-  reverse_proxy /openapi.json server:8000
-  reverse_proxy /health server:8000
+  handle /api/* {
+    reverse_proxy server:8000
+  }
 
-  reverse_proxy client:3000
+  handle /docs* {
+    reverse_proxy server:8000
+  }
+
+  handle /openapi.json {
+    reverse_proxy server:8000
+  }
+
+  handle /health {
+    reverse_proxy server:8000
+  }
+
+  handle /_build/* {
+    header Cache-Control "public, max-age=31536000, immutable"
+    reverse_proxy client:3000
+  }
+
+  handle /assets/* {
+    header Cache-Control "public, max-age=31536000, immutable"
+    reverse_proxy client:3000
+  }
+
+  handle /favicon.ico {
+    respond 204
+  }
+
+  handle {
+    header Cache-Control "no-store"
+    reverse_proxy client:3000
+  }
 }

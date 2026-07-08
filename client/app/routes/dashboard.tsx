@@ -16,7 +16,7 @@ import { useEffect, useState } from 'react'
 import { Badge } from '../components/ui/badge'
 import { Button } from '../components/ui/button'
 import { fetchCurrentUser, fetchHealth, type UserResponse } from '../lib/api'
-import { clearSession, getStoredUser, isLoggedIn } from '../lib/auth'
+import { clearSession, isLoggedIn } from '../lib/auth'
 
 export const Route = createFileRoute('/dashboard')({
   component: DashboardLayout,
@@ -42,29 +42,54 @@ function sectionTitle(pathname: string) {
 function DashboardLayout() {
   const navigate = useNavigate()
   const pathname = useRouterState({ select: (state) => state.location.pathname })
-  const [user, setUser] = useState<UserResponse | null>(() => getStoredUser())
+  const [authChecked, setAuthChecked] = useState(false)
+  const [user, setUser] = useState<UserResponse | null>(null)
   const [health, setHealth] = useState('checking')
 
   useEffect(() => {
     if (!isLoggedIn()) {
+      clearSession()
       void navigate({ to: '/' })
       return
     }
 
+    let cancelled = false
+
     void Promise.all([fetchCurrentUser(), fetchHealth()])
       .then(([currentUser, healthResponse]) => {
+        if (cancelled) return
         setUser(currentUser)
         setHealth(healthResponse.status)
+        setAuthChecked(true)
       })
       .catch(() => {
+        if (cancelled) return
         clearSession()
         void navigate({ to: '/' })
       })
+
+    return () => {
+      cancelled = true
+    }
   }, [navigate])
 
   function logout() {
     clearSession()
     void navigate({ to: '/' })
+  }
+
+  if (!authChecked) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background px-4">
+        <div className="text-center">
+          <div className="mx-auto mb-3 flex size-10 items-center justify-center rounded-md bg-primary text-base font-bold text-primary-foreground">
+            T
+          </div>
+          <p className="text-sm font-medium text-foreground">Checking session</p>
+          <p className="mt-1 text-xs text-muted-foreground">Preparing the operator console.</p>
+        </div>
+      </div>
+    )
   }
 
   return (

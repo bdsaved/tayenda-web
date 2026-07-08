@@ -59,7 +59,12 @@ function LoginPage() {
         <form className="mt-4 space-y-4" onSubmit={handleSubmit}>
           <label className="block space-y-1.5 text-sm font-medium">
             <span>Username</span>
-            <Input value={username} onChange={(event) => setUsername(event.target.value)} required />
+            <Input
+              value={username}
+              onChange={(event) => setUsername(event.target.value)}
+              autoComplete="username"
+              required
+            />
           </label>
           <label className="block space-y-1.5 text-sm font-medium">
             <span>Password</span>
@@ -67,6 +72,7 @@ function LoginPage() {
               type="password"
               value={password}
               onChange={(event) => setPassword(event.target.value)}
+              autoComplete="current-password"
               required
             />
           </label>

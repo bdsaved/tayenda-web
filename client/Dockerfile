@@ -18,7 +18,7 @@ RUN npm install -g pnpm@10.23.0
 COPY --from=deps /app/node_modules ./node_modules
 COPY package.json pnpm-lock.yaml* ./
 COPY . .
-RUN pnpm build
+RUN rm -rf .output .vinxi && pnpm build
 
 FROM node:22-slim AS runner
 

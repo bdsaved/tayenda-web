@@ -1,10 +1,19 @@
 import { createFileRoute } from '@tanstack/react-router'
-import { Layers, MapPin, Route as RouteIcon } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 
 import { Badge } from '../components/ui/badge'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card'
-import { fetchProcessingHealth, fetchRoadTraces, fetchTrips, type ProcessingHealthResponse, type TripListItem, type TripTrace } from '../lib/api'
+import { Notice } from '../components/ui/notice'
+import { PageHeader } from '../components/ui/page-header'
+import { StatTile } from '../components/ui/stat-tile'
+import {
+  fetchProcessingHealth,
+  fetchRoadTraces,
+  fetchTrips,
+  type ProcessingHealthResponse,
+  type TracePoint,
+  type TripListItem,
+  type TripTrace,
+} from '../lib/api'
 import { formatDistance } from '../lib/dashboard'
 
 export const Route = createFileRoute('/dashboard/map')({
@@ -38,136 +47,338 @@ function CoveragePage() {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-        <div>
-          <Badge>Coverage</Badge>
-          <h2 className="mt-3 font-display text-3xl font-semibold tracking-tight">Road coverage</h2>
-          <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
-            Summary of collected distance, upload sources, road surfaces, and vehicle groups.
-          </p>
-        </div>
-        <Badge variant="secondary">{uploaded}/{trips.length} finalized</Badge>
+      <PageHeader
+        title="Coverage"
+        description="Collected distance, GPS traces, road surfaces, and vehicle groups."
+        actions={<Badge variant="secondary">{uploaded}/{trips.length} finalized</Badge>}
+      />
+
+      {error ? <Notice tone="error">{error}</Notice> : null}
+
+      <div className="grid gap-3 sm:grid-cols-3">
+        <StatTile label="Distance" value={formatDistance(totalDistance)} />
+        <StatTile label="Surface groups" value={String(bySurface.length)} />
+        <StatTile label="Vehicle groups" value={String(byVehicle.length)} />
       </div>
 
-      {error ? <Card className="border-destructive/30 bg-destructive/5"><CardContent className="py-4 text-sm text-[hsl(2_70%_42%)]">{error}</CardContent></Card> : null}
-
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.1fr)_420px]">
-        <Card className="glass-panel">
-          <CardHeader>
-            <div className="flex items-center gap-2">
-              <MapPin className="size-4" />
-              <CardTitle>Recorded road traces</CardTitle>
-            </div>
-            <CardDescription>
-              Downsampled GPS traces from uploaded trips.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="min-h-[360px] rounded-xl border border-border bg-secondary/30 p-3">
-              <TraceCanvas traces={traces} />
-            </div>
-            <div className="mt-4 grid gap-3 md:grid-cols-3">
-              <Metric label="Distance" value={formatDistance(totalDistance)} />
-              <Metric label="Surfaces" value={String(bySurface.length)} />
-              <Metric label="Vehicles" value={String(byVehicle.length)} />
-            </div>
-          </CardContent>
-        </Card>
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.1fr)_380px]">
+        <div className="flat-panel p-4">
+          <div className="mb-3">
+            <h2 className="text-base font-semibold text-foreground">Coverage map</h2>
+            <p className="text-sm text-muted-foreground">OpenStreetMap basemap with downsampled uploaded GPS traces.</p>
+          </div>
+          <TraceMap traces={traces} />
+        </div>
 
         <div className="space-y-4">
           <Distribution title="Road surfaces" rows={bySurface} total={trips.length} />
           <Distribution title="Vehicle groups" rows={byVehicle} total={trips.length} />
-          <Card className="glass-panel">
-            <CardHeader>
-              <div className="flex items-center gap-2">
-                <RouteIcon className="size-4" />
-                <CardTitle>Processing health</CardTitle>
-              </div>
-            </CardHeader>
-            <CardContent className="text-sm leading-6 text-muted-foreground">
+
+          <div className="flat-panel">
+            <div className="border-b border-border px-4 py-3">
+              <h2 className="text-base font-semibold text-foreground">Processing health</h2>
+            </div>
+            <div className="px-4 py-3 text-sm text-muted-foreground">
               {processingHealth ? (
-                <div className="space-y-1">
-                  <div>Status: {processingHealth.status}</div>
-                  <div>Interval: {processingHealth.interval_seconds}s</div>
-                  <div>Processed last run: {processingHealth.processed_trips_last_run}</div>
-                  <div>Cleaned raw files: {processingHealth.cleaned_files_last_run}</div>
-                  <div>
-                    Next run: {processingHealth.next_run_at ? formatDate(processingHealth.next_run_at) : 'N/A'}
-                  </div>
-                </div>
+                <dl className="space-y-1.5">
+                  <HealthRow label="Status" value={processingHealth.status} />
+                  <HealthRow label="Interval" value={`${processingHealth.interval_seconds}s`} />
+                  <HealthRow label="Processed last run" value={String(processingHealth.processed_trips_last_run)} />
+                  <HealthRow label="Cleaned raw files" value={String(processingHealth.cleaned_files_last_run)} />
+                  <HealthRow
+                    label="Next run"
+                    value={processingHealth.next_run_at ? formatDate(processingHealth.next_run_at) : 'N/A'}
+                  />
+                </dl>
               ) : (
                 'Processing health not available.'
               )}
-            </CardContent>
-          </Card>
+            </div>
+          </div>
         </div>
       </div>
     </div>
   )
 }
 
-function TraceCanvas({ traces }: { traces: TripTrace[] }) {
-  if (traces.length === 0) {
-    return <div className="flex h-[320px] items-center justify-center text-sm text-muted-foreground">No trace data yet.</div>
-  }
-
-  const points = traces.flatMap((trace) => trace.points)
-  const minLat = Math.min(...points.map((p) => p.lat))
-  const maxLat = Math.max(...points.map((p) => p.lat))
-  const minLon = Math.min(...points.map((p) => p.lon))
-  const maxLon = Math.max(...points.map((p) => p.lon))
-  const latRange = Math.max(0.00001, maxLat - minLat)
-  const lonRange = Math.max(0.00001, maxLon - minLon)
-
+function HealthRow({ label, value }: { label: string; value: string }) {
   return (
-    <svg viewBox="0 0 1000 500" className="h-[320px] w-full rounded-lg border border-border bg-card">
-      {traces.map((trace, idx) => {
-        const poly = trace.points
-          .map((p) => {
-            const x = ((p.lon - minLon) / lonRange) * 1000
-            const y = 500 - ((p.lat - minLat) / latRange) * 500
-            return `${x.toFixed(2)},${y.toFixed(2)}`
-          })
-          .join(' ')
-        const color = `hsl(${150 + ((idx * 23) % 60)} 70% 42%)`
-        return <polyline key={trace.trip_id} points={poly} fill="none" stroke={color} strokeWidth="2" />
-      })}
-    </svg>
-  )
-}
-
-function Metric({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-xl border border-border bg-secondary/40 p-4">
-      <Layers className="size-4 text-primary" />
-      <p className="mt-3 font-mono text-[11px] uppercase tracking-[0.16em] text-muted-foreground">{label}</p>
-      <p className="mt-2 font-display text-xl font-semibold">{value}</p>
+    <div className="flex items-baseline justify-between gap-4">
+      <dt>{label}</dt>
+      <dd className="text-right text-foreground">{value}</dd>
     </div>
   )
 }
 
+const MAP_WIDTH = 1000
+const MAP_HEIGHT = 520
+const TILE_SIZE = 256
+const MIN_ZOOM = 4
+const MAX_ZOOM = 17
+const DEFAULT_CENTER = { lat: -13.2543, lon: 34.3015 }
+
+type ProjectedPoint = {
+  x: number
+  y: number
+}
+
+type MapTile = {
+  key: string
+  x: number
+  y: number
+  url: string
+}
+
+function TraceMap({ traces }: { traces: TripTrace[] }) {
+  const validTraces = useMemo(
+    () =>
+      traces
+        .map((trace) => ({
+          ...trace,
+          points: trace.points.filter(isValidPoint),
+        }))
+        .filter((trace) => trace.points.length > 0),
+    [traces],
+  )
+  const points = useMemo(() => validTraces.flatMap((trace) => trace.points), [validTraces])
+  const fittedZoom = useMemo(() => fitZoom(points), [points])
+  const center = useMemo(() => getMapCenter(points), [points])
+  const [zoomOffset, setZoomOffset] = useState(0)
+
+  useEffect(() => {
+    setZoomOffset(0)
+  }, [fittedZoom, validTraces.length])
+
+  const zoom = clamp(fittedZoom + zoomOffset, MIN_ZOOM, MAX_ZOOM)
+  const centerPoint = projectMercator(center, zoom)
+  const view = {
+    minX: centerPoint.x - MAP_WIDTH / 2,
+    minY: centerPoint.y - MAP_HEIGHT / 2,
+  }
+  const tiles = getVisibleTiles(view.minX, view.minY, MAP_WIDTH, MAP_HEIGHT, zoom)
+
+  return (
+    <div className="relative overflow-hidden rounded-md border border-border bg-muted">
+      <svg
+        viewBox={`${view.minX} ${view.minY} ${MAP_WIDTH} ${MAP_HEIGHT}`}
+        className="h-[360px] w-full sm:h-[430px]"
+        role="img"
+        aria-label="Coverage map with uploaded road traces"
+      >
+        <rect x={view.minX} y={view.minY} width={MAP_WIDTH} height={MAP_HEIGHT} fill="hsl(var(--muted))" />
+        {tiles.map((tile) => (
+          <image
+            key={tile.key}
+            href={tile.url}
+            x={tile.x}
+            y={tile.y}
+            width={TILE_SIZE}
+            height={TILE_SIZE}
+            preserveAspectRatio="none"
+          />
+        ))}
+        <rect
+          x={view.minX}
+          y={view.minY}
+          width={MAP_WIDTH}
+          height={MAP_HEIGHT}
+          fill="hsl(var(--background))"
+          opacity="0.08"
+        />
+        {validTraces.map((trace, idx) => {
+          const poly = trace.points
+            .map((point) => {
+              const projected = projectMercator(point, zoom)
+              return `${projected.x.toFixed(2)},${projected.y.toFixed(2)}`
+            })
+            .join(' ')
+          return (
+            <polyline
+              key={trace.trip_id}
+              points={poly}
+              fill="none"
+              stroke={traceColor(trace.road_surface, idx)}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeOpacity="0.95"
+              strokeWidth="3"
+              vectorEffect="non-scaling-stroke"
+            />
+          )
+        })}
+        {points.length > 0 ? (
+          <circle
+            cx={projectMercator(points[0], zoom).x}
+            cy={projectMercator(points[0], zoom).y}
+            r="5"
+            fill="hsl(150 93% 28%)"
+            stroke="white"
+            strokeWidth="2"
+            vectorEffect="non-scaling-stroke"
+          />
+        ) : null}
+      </svg>
+
+      <div className="absolute left-3 top-3 rounded-md border border-border bg-background/90 px-3 py-2 text-xs shadow-sm backdrop-blur">
+        <p className="font-medium text-foreground">{validTraces.length} uploaded trace{validTraces.length === 1 ? '' : 's'}</p>
+        <p className="text-muted-foreground">Zoom {zoom}</p>
+      </div>
+
+      <div className="absolute right-3 top-3 flex overflow-hidden rounded-md border border-border bg-background/90 shadow-sm backdrop-blur">
+        <button
+          type="button"
+          className="px-3 py-2 text-sm font-semibold text-foreground hover:bg-muted"
+          onClick={() => setZoomOffset((current) => current + 1)}
+          aria-label="Zoom in"
+        >
+          +
+        </button>
+        <button
+          type="button"
+          className="border-l border-border px-3 py-2 text-sm font-semibold text-foreground hover:bg-muted"
+          onClick={() => setZoomOffset((current) => current - 1)}
+          aria-label="Zoom out"
+        >
+          -
+        </button>
+        <button
+          type="button"
+          className="border-l border-border px-3 py-2 text-sm text-foreground hover:bg-muted"
+          onClick={() => setZoomOffset(0)}
+        >
+          Fit
+        </button>
+      </div>
+
+      {validTraces.length === 0 ? (
+        <div className="absolute inset-x-4 bottom-12 rounded-md border border-border bg-background/95 px-4 py-3 text-sm text-muted-foreground shadow-sm">
+          No uploaded GPS traces yet. The basemap is shown for Malawi; finalized mobile trips will draw here after processing.
+        </div>
+      ) : null}
+
+      <div className="absolute bottom-2 right-2 rounded bg-background/90 px-2 py-1 text-[11px] text-muted-foreground">
+        Map data {' '}
+        <a className="underline" href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">
+          OpenStreetMap
+        </a>
+      </div>
+    </div>
+  )
+}
+
+function isValidPoint(point: TracePoint) {
+  return (
+    Number.isFinite(point.lat) &&
+    Number.isFinite(point.lon) &&
+    point.lat >= -85 &&
+    point.lat <= 85 &&
+    point.lon >= -180 &&
+    point.lon <= 180
+  )
+}
+
+function getMapCenter(points: TracePoint[]) {
+  if (points.length === 0) return DEFAULT_CENTER
+  const lats = points.map((point) => point.lat)
+  const lons = points.map((point) => point.lon)
+  return {
+    lat: (Math.min(...lats) + Math.max(...lats)) / 2,
+    lon: (Math.min(...lons) + Math.max(...lons)) / 2,
+  }
+}
+
+function fitZoom(points: TracePoint[]) {
+  if (points.length <= 1) return 11
+
+  for (let zoom = MAX_ZOOM; zoom >= MIN_ZOOM; zoom -= 1) {
+    const projected = points.map((point) => projectMercator(point, zoom))
+    const spanX = Math.max(...projected.map((point) => point.x)) - Math.min(...projected.map((point) => point.x))
+    const spanY = Math.max(...projected.map((point) => point.y)) - Math.min(...projected.map((point) => point.y))
+
+    if (spanX <= MAP_WIDTH * 0.78 && spanY <= MAP_HEIGHT * 0.78) {
+      return zoom
+    }
+  }
+
+  return MIN_ZOOM
+}
+
+function projectMercator(point: TracePoint, zoom: number): ProjectedPoint {
+  const lat = clamp(point.lat, -85, 85)
+  const sinLat = Math.sin((lat * Math.PI) / 180)
+  const scale = TILE_SIZE * 2 ** zoom
+
+  return {
+    x: ((point.lon + 180) / 360) * scale,
+    y: (0.5 - Math.log((1 + sinLat) / (1 - sinLat)) / (4 * Math.PI)) * scale,
+  }
+}
+
+function getVisibleTiles(minX: number, minY: number, width: number, height: number, zoom: number): MapTile[] {
+  const maxTile = 2 ** zoom
+  const startX = Math.floor(minX / TILE_SIZE)
+  const endX = Math.floor((minX + width) / TILE_SIZE)
+  const startY = clamp(Math.floor(minY / TILE_SIZE), 0, maxTile - 1)
+  const endY = clamp(Math.floor((minY + height) / TILE_SIZE), 0, maxTile - 1)
+  const tiles: MapTile[] = []
+
+  for (let tileX = startX; tileX <= endX; tileX += 1) {
+    for (let tileY = startY; tileY <= endY; tileY += 1) {
+      const wrappedX = wrapTile(tileX, maxTile)
+      tiles.push({
+        key: `${zoom}-${tileX}-${tileY}`,
+        x: tileX * TILE_SIZE,
+        y: tileY * TILE_SIZE,
+        url: `https://tile.openstreetmap.org/${zoom}/${wrappedX}/${tileY}.png`,
+      })
+    }
+  }
+
+  return tiles
+}
+
+function wrapTile(tileX: number, maxTile: number) {
+  return ((tileX % maxTile) + maxTile) % maxTile
+}
+
+function traceColor(surface: string, index: number) {
+  const key = surface.toUpperCase()
+  if (key.includes('PAVED')) return 'hsl(150 93% 28%)'
+  if (key.includes('GRAVEL')) return 'hsl(32 95% 44%)'
+  if (key.includes('DIRT')) return 'hsl(18 72% 43%)'
+  if (key.includes('MIXED')) return 'hsl(205 85% 42%)'
+  const fallback = ['hsl(150 93% 28%)', 'hsl(205 85% 42%)', 'hsl(32 95% 44%)']
+  return fallback[index % fallback.length]
+}
+
+function clamp(value: number, min: number, max: number) {
+  return Math.min(Math.max(value, min), max)
+}
+
 function Distribution({ title, rows, total }: { title: string; rows: [string, number][]; total: number }) {
   return (
-    <Card className="glass-panel">
-      <CardHeader>
-        <CardTitle>{title}</CardTitle>
-        <CardDescription>Grouped from uploaded trip metadata.</CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-3">
+    <div className="flat-panel">
+      <div className="border-b border-border px-4 py-3">
+        <h2 className="text-base font-semibold text-foreground">{title}</h2>
+      </div>
+      <div className="space-y-3 px-4 py-3">
         {rows.length === 0 ? <p className="text-sm text-muted-foreground">No data yet.</p> : null}
         {rows.map(([label, count]) => (
-          <div key={label} className="rounded-xl border border-border bg-secondary/40 p-4">
+          <div key={label}>
             <div className="flex items-center justify-between gap-3">
-              <p className="text-sm font-semibold">{label}</p>
-              <p className="text-sm text-muted-foreground">{count}</p>
+              <p className="text-sm text-foreground">{label}</p>
+              <p className="text-sm tabular-nums text-muted-foreground">{count}</p>
             </div>
-            <div className="mt-3 h-2 overflow-hidden rounded-full border border-border bg-secondary">
-              <div className="brand-gradient h-full rounded-full transition-[width] duration-700" style={{ width: `${total > 0 ? Math.max(8, Math.round((count / total) * 100)) : 0}%` }} />
+            <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-muted">
+              <div
+                className="h-full rounded-full bg-primary"
+                style={{ width: `${total > 0 ? Math.max(4, Math.round((count / total) * 100)) : 0}%` }}
+              />
             </div>
           </div>
         ))}
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   )
 }
 

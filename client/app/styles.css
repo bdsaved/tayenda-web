@@ -1,42 +1,43 @@
-@import url('https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700;800&family=Public+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500&display=swap');
 @import "tailwindcss";
 
 :root {
-  /* Tayenda — green mobility. Deep ink surfaces, emerald signal. */
-  --background: 160 30% 98%;
-  --foreground: 200 24% 11%;
+  /* Tayenda enterprise console. Flat surfaces, logo palette:
+     deep green #058B48 = hsl(150 93% 28%), lime #D6DE23 = hsl(63 73% 50%). */
+  --background: 150 10% 98%;
+  --foreground: 160 24% 11%;
   --card: 0 0% 100%;
-  --card-foreground: 200 24% 11%;
+  --card-foreground: 160 24% 11%;
   --popover: 0 0% 100%;
-  --popover-foreground: 200 24% 11%;
+  --popover-foreground: 160 24% 11%;
 
-  --primary: 160 84% 30%;          /* emerald */
+  --primary: 150 93% 28%;          /* logo green #058B48 */
   --primary-foreground: 150 40% 98%;
-  --secondary: 160 24% 95%;
-  --secondary-foreground: 200 22% 16%;
-  --muted: 160 20% 95%;
-  --muted-foreground: 200 10% 42%;
-  --accent: 160 60% 94%;
-  --accent-foreground: 160 84% 22%;
+  --secondary: 150 15% 95%;
+  --secondary-foreground: 160 22% 16%;
+  --muted: 150 12% 95%;
+  --muted-foreground: 160 8% 42%;
+  --accent: 150 40% 94%;
+  --accent-foreground: 150 93% 22%;
 
-  --success: 152 68% 38%;
+  --success: 150 93% 32%;
   --success-foreground: 150 40% 98%;
   --warning: 38 92% 48%;
   --warning-foreground: 30 45% 12%;
   --destructive: 2 78% 55%;
   --destructive-foreground: 0 0% 100%;
 
-  --border: 160 16% 89%;
-  --input: 160 16% 85%;
-  --ring: 160 84% 30%;
+  --border: 150 10% 90%;
+  --input: 150 10% 86%;
+  --ring: 150 93% 28%;
 
-  /* Deep ink sidebar with an emerald undertone */
-  --sidebar: 197 46% 8%;
-  --sidebar-foreground: 165 25% 92%;
-  --sidebar-accent: 160 70% 40%;
-  --sidebar-border: 197 30% 18%;
+  /* Light sidebar, DigitalOcean-style */
+  --sidebar: 0 0% 100%;
+  --sidebar-foreground: 160 15% 30%;
+  --sidebar-accent: 150 93% 28%;
+  --sidebar-border: 150 10% 90%;
 
-  --radius: 0.85rem;
+  --radius: 0.5rem;
 }
 
 @theme inline {
@@ -69,11 +70,11 @@
   --color-sidebar-border: hsl(var(--sidebar-border));
 
   --radius-lg: var(--radius);
-  --radius-md: calc(var(--radius) - 0.25rem);
-  --radius-sm: calc(var(--radius) - 0.4rem);
+  --radius-md: calc(var(--radius) - 0.125rem);
+  --radius-sm: calc(var(--radius) - 0.25rem);
 
   --font-sans: "Public Sans", Arial, ui-sans-serif, sans-serif;
-  --font-display: "Sora", "Public Sans", Arial, ui-sans-serif, sans-serif;
+  --font-display: "Public Sans", Arial, ui-sans-serif, sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, monospace;
 }
 
@@ -89,11 +90,6 @@
 
   body {
     @apply min-h-screen bg-background font-sans text-foreground antialiased;
-    background-image:
-      radial-gradient(60rem 40rem at 100% -10%, hsl(160 70% 45% / 0.10), transparent 60%),
-      radial-gradient(50rem 40rem at -10% 10%, hsl(196 80% 40% / 0.08), transparent 55%),
-      radial-gradient(40rem 30rem at 50% 120%, hsl(160 70% 45% / 0.06), transparent 60%);
-    background-attachment: fixed;
   }
 
   a {
@@ -113,41 +109,12 @@
 }
 
 @layer utilities {
-  .section-enter {
-    animation: section-enter 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
-  }
-
   .flat-panel {
-    @apply rounded-xl border border-border bg-card;
+    @apply rounded-lg border border-border bg-card;
   }
 
   .field-shell {
-    @apply flex h-11 w-full rounded-lg border border-input bg-background/80 px-3 text-sm text-foreground transition-colors placeholder:text-muted-foreground/80 focus:border-primary focus:ring-2 focus:ring-primary/15;
-  }
-
-  .grid-dots {
-    background-image: radial-gradient(hsl(160 30% 30% / 0.10) 1px, transparent 1px);
-    background-size: 18px 18px;
-  }
-
-  /* Signature elevated surface used across the dashboard */
-  .glass-panel {
-    @apply rounded-2xl border border-border/80 bg-card/95 shadow-[0_1px_0_0_hsl(0_0%_100%)_inset,0_18px_40px_-24px_hsl(200_40%_20%/0.28)] backdrop-blur-sm;
-  }
-
-  .status-line {
-    background: linear-gradient(90deg, hsl(var(--sidebar-accent)), hsl(160 84% 55%), hsl(196 80% 55%));
-  }
-
-  .brand-gradient {
-    background: linear-gradient(120deg, hsl(160 84% 32%), hsl(170 80% 40%), hsl(196 80% 42%));
-  }
-
-  .brand-text {
-    background: linear-gradient(120deg, hsl(160 84% 34%), hsl(190 80% 42%));
-    -webkit-background-clip: text;
-    background-clip: text;
-    color: transparent;
+    @apply flex h-9 w-full rounded-md border border-input bg-background px-3 text-sm text-foreground transition-colors placeholder:text-muted-foreground/80 focus:border-primary focus:ring-2 focus:ring-primary/15;
   }
 
   .ring-focus {
@@ -155,24 +122,11 @@
   }
 }
 
-@keyframes section-enter {
-  from {
-    opacity: 0;
-    transform: translateY(14px);
-  }
-
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-@keyframes pulse-ring {
-  0% { box-shadow: 0 0 0 0 hsl(var(--primary) / 0.45); }
-  70% { box-shadow: 0 0 0 12px hsl(var(--primary) / 0); }
-  100% { box-shadow: 0 0 0 0 hsl(var(--primary) / 0); }
+@keyframes live-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
 }
 
 .live-dot {
-  animation: pulse-ring 2s infinite;
+  animation: live-pulse 2s ease-in-out infinite;
 }

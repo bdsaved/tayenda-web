@@ -1,9 +1,12 @@
-import { createFileRoute } from '@tanstack/react-router'
-import { Activity, AlertTriangle, CheckCircle2, HardDrive, Route as RouteIcon, Smartphone } from 'lucide-react'
+import { Link, createFileRoute } from '@tanstack/react-router'
+import { CheckCircle2 } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 
 import { Badge } from '../components/ui/badge'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card'
+import { Notice } from '../components/ui/notice'
+import { PageHeader } from '../components/ui/page-header'
+import { StatTile } from '../components/ui/stat-tile'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table'
 import { fetchTrips, type TripListItem } from '../lib/api'
 import { captureScore, deriveAlerts, deriveDevices, formatDate, formatDistance } from '../lib/dashboard'
 
@@ -43,165 +46,146 @@ function DashboardOverview() {
   const uploaded = trips.filter((trip) => trip.status === 'UPLOADED').length
   const samples = trips.reduce((total, trip) => total + trip.total_samples_received, 0)
   const distance = trips.reduce((total, trip) => total + (trip.total_distance ?? 0), 0)
-  const latestTrips = trips.slice(0, 6)
+  const latestTrips = trips.slice(0, 8)
 
   return (
     <div className="space-y-4">
-      {error ? (
-        <Card className="border-destructive/30 bg-destructive/5">
-          <CardContent className="py-4 text-sm text-[hsl(2_70%_42%)]">{error}</CardContent>
-        </Card>
-      ) : null}
+      <PageHeader
+        title="Overview"
+        description="Capture readiness and the latest activity from the field network."
+      />
 
-      <div className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
-        <Card className="glass-panel">
-          <CardHeader>
-            <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-              <div>
-                <Badge>Capture state</Badge>
-                <CardTitle className="mt-4 text-3xl">Network readiness</CardTitle>
-                <CardDescription>
-                  One operational score from finalized trips, metadata completeness, and upload health.
-                </CardDescription>
-              </div>
-              <div className="rounded-xl border border-primary/15 bg-accent px-5 py-4 text-right">
-                <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-primary/70">Score</p>
-                <p className="mt-1 font-display text-4xl font-semibold text-primary">{score}%</p>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="h-3 overflow-hidden rounded-full border border-border bg-secondary">
-              <div className="brand-gradient h-full rounded-full transition-[width] duration-700" style={{ width: `${score}%` }} />
-            </div>
-            <div className="mt-5 grid gap-3 md:grid-cols-4">
-              <Metric icon={Activity} label="Trips" value={String(trips.length)} detail={`${uploaded} finalized`} />
-              <Metric icon={Smartphone} label="Devices" value={String(devices.length)} detail="Unique collectors" />
-              <Metric icon={HardDrive} label="Samples" value={samples.toLocaleString()} detail="Stored readings" />
-              <Metric icon={RouteIcon} label="Distance" value={formatDistance(distance)} detail="Reported coverage" />
-            </div>
-          </CardContent>
-        </Card>
+      {error ? <Notice tone="error">{error}</Notice> : null}
 
-        <Card className="glass-panel">
-          <CardHeader>
-            <CardTitle>System alerts</CardTitle>
-            <CardDescription>What needs attention before the next field session.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {alerts.length === 0 ? (
-              <AlertRow icon={CheckCircle2} title="No active alerts" detail="Uploads and metadata look clean." />
-            ) : (
-              alerts.slice(0, 4).map((alert) => (
-                <AlertRow key={alert.id} icon={AlertTriangle} title={alert.title} detail={alert.detail} />
-              ))
-            )}
-          </CardContent>
-        </Card>
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
+        <StatTile label="Readiness" value={`${score}%`} tone="primary" hint="Upload + metadata score" />
+        <StatTile label="Trips" value={trips.length.toLocaleString()} hint={`${uploaded} finalized`} />
+        <StatTile label="Uploaded" value={uploaded.toLocaleString()} />
+        <StatTile label="Devices" value={devices.length.toLocaleString()} hint="Unique collectors" />
+        <StatTile label="Samples" value={samples.toLocaleString()} />
+        <StatTile label="Distance" value={formatDistance(distance)} />
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_420px]">
-        <Card className="glass-panel">
-          <CardHeader>
-            <CardTitle>Recent trip timeline</CardTitle>
-            <CardDescription>Latest records reaching the shared backend.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            {loading ? (
-              <p className="text-sm text-muted-foreground">Loading trips...</p>
-            ) : latestTrips.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No trips uploaded yet.</p>
-            ) : (
-              latestTrips.map((trip) => <TripTimelineItem key={trip.trip_id} trip={trip} />)
-            )}
-          </CardContent>
-        </Card>
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_380px]">
+        <div className="flat-panel overflow-hidden">
+          <div className="border-b border-border px-4 py-3">
+            <h2 className="text-base font-semibold text-foreground">Recent trips</h2>
+            <p className="text-sm text-muted-foreground">Latest records reaching the shared backend.</p>
+          </div>
+          {loading ? (
+            <p className="px-4 py-6 text-sm text-muted-foreground">Loading trips...</p>
+          ) : latestTrips.length === 0 ? (
+            <p className="px-4 py-6 text-sm text-muted-foreground">No trips uploaded yet.</p>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow className="hover:bg-transparent">
+                  <TableHead>Trip</TableHead>
+                  <TableHead>Device</TableHead>
+                  <TableHead>Start</TableHead>
+                  <TableHead>Status</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {latestTrips.map((trip) => (
+                  <TableRow key={trip.trip_id}>
+                    <TableCell>
+                      <Link
+                        to="/dashboard/trips/$tripId"
+                        params={{ tripId: trip.trip_id }}
+                        className="font-mono text-xs font-medium text-primary hover:underline"
+                      >
+                        {trip.trip_id}
+                      </Link>
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {trip.device_model ?? 'Unknown device'}
+                    </TableCell>
+                    <TableCell className="whitespace-nowrap text-muted-foreground">
+                      {formatDate(trip.start_time)}
+                    </TableCell>
+                    <TableCell>
+                      <Badge
+                        variant={
+                          trip.status === 'UPLOADED'
+                            ? 'success'
+                            : trip.status === 'FAILED'
+                              ? 'destructive'
+                              : 'warning'
+                        }
+                      >
+                        {trip.status}
+                      </Badge>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </div>
 
-        <Card className="glass-panel">
-          <CardHeader>
-            <CardTitle>Device health</CardTitle>
-            <CardDescription>Most recent collection devices by last activity.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {devices.slice(0, 5).map((device) => (
-              <div key={device.id} className="rounded-xl border border-border bg-secondary/40 p-4">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-semibold">{device.model}</p>
-                    <p className="mt-1 truncate font-mono text-xs text-muted-foreground">{device.id}</p>
+        <div className="space-y-4">
+          <div className="flat-panel">
+            <div className="border-b border-border px-4 py-3">
+              <h2 className="text-base font-semibold text-foreground">Alerts</h2>
+            </div>
+            <div className="divide-y divide-border">
+              {alerts.length === 0 ? (
+                <div className="flex items-center gap-2.5 px-4 py-3">
+                  <CheckCircle2 className="size-4 shrink-0 text-success" />
+                  <p className="text-sm text-muted-foreground">No active alerts.</p>
+                </div>
+              ) : (
+                alerts.slice(0, 4).map((alert) => (
+                  <div key={alert.id} className="flex gap-2.5 px-4 py-3">
+                    <span
+                      className={`mt-1.5 size-2 shrink-0 rounded-full ${severityDot(alert.severity)}`}
+                    />
+                    <div>
+                      <p className="text-sm font-medium text-foreground">{alert.title}</p>
+                      <p className="mt-0.5 text-sm leading-5 text-muted-foreground">{alert.detail}</p>
+                    </div>
                   </div>
-                  <Badge variant={device.status === 'attention' ? 'destructive' : 'outline'}>{device.status}</Badge>
-                </div>
-                <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
-                  <span className="text-muted-foreground">{device.trips} trips</span>
-                  <span className="text-right text-muted-foreground">{device.samples.toLocaleString()} samples</span>
-                </div>
-              </div>
-            ))}
-            {devices.length === 0 ? <p className="text-sm text-muted-foreground">No devices yet.</p> : null}
-          </CardContent>
-        </Card>
+                ))
+              )}
+            </div>
+          </div>
+
+          <div className="flat-panel">
+            <div className="border-b border-border px-4 py-3">
+              <h2 className="text-base font-semibold text-foreground">Device health</h2>
+            </div>
+            <div className="divide-y divide-border">
+              {devices.length === 0 ? (
+                <p className="px-4 py-3 text-sm text-muted-foreground">No devices yet.</p>
+              ) : (
+                devices.slice(0, 5).map((device) => (
+                  <div key={device.id} className="flex items-center justify-between gap-3 px-4 py-2.5">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium text-foreground">{device.model}</p>
+                      <p className="truncate font-mono text-xs text-muted-foreground">{device.id}</p>
+                    </div>
+                    <div className="flex shrink-0 items-center gap-3">
+                      <p className="text-xs text-muted-foreground">
+                        {device.trips} trips · {device.samples.toLocaleString()} samples
+                      </p>
+                      <Badge variant={device.status === 'attention' ? 'destructive' : 'outline'}>
+                        {device.status}
+                      </Badge>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   )
 }
 
-function Metric({
-  icon: Icon,
-  label,
-  value,
-  detail,
-}: {
-  icon: typeof Activity
-  label: string
-  value: string
-  detail: string
-}) {
-  return (
-    <div className="rounded-xl border border-border bg-secondary/40 p-4 transition-colors hover:border-primary/30 hover:bg-accent/40">
-      <div className="flex size-9 items-center justify-center rounded-lg bg-accent text-primary">
-        <Icon className="size-5" />
-      </div>
-      <p className="mt-4 font-mono text-[11px] uppercase tracking-[0.16em] text-muted-foreground">{label}</p>
-      <p className="mt-2 font-display text-2xl font-semibold">{value}</p>
-      <p className="mt-1 text-sm text-muted-foreground">{detail}</p>
-    </div>
-  )
-}
-
-function AlertRow({
-  icon: Icon,
-  title,
-  detail,
-}: {
-  icon: typeof AlertTriangle
-  title: string
-  detail: string
-}) {
-  return (
-    <div className="flex gap-3 rounded-xl border border-border bg-secondary/40 p-4">
-      <Icon className="mt-0.5 size-4 shrink-0 text-primary" />
-      <div>
-        <p className="text-sm font-semibold">{title}</p>
-        <p className="mt-1 text-sm leading-5 text-muted-foreground">{detail}</p>
-      </div>
-    </div>
-  )
-}
-
-function TripTimelineItem({ trip }: { trip: TripListItem }) {
-  return (
-    <div className="grid gap-3 rounded-xl border border-border bg-secondary/30 p-4 transition-colors hover:border-primary/30 md:grid-cols-[1fr_160px_120px] md:items-center">
-      <div className="min-w-0">
-        <p className="truncate font-mono text-xs font-semibold">{trip.trip_id}</p>
-        <p className="mt-1 text-sm text-muted-foreground">
-          {trip.device_model ?? 'Unknown device'} / {trip.upload_source}
-        </p>
-      </div>
-      <p className="text-sm text-muted-foreground">{formatDate(trip.start_time)}</p>
-      <Badge variant={trip.status === 'UPLOADED' ? 'success' : trip.status === 'FAILED' ? 'destructive' : 'warning'}>
-        {trip.status}
-      </Badge>
-    </div>
-  )
+function severityDot(severity: 'critical' | 'warning' | 'info') {
+  if (severity === 'critical') return 'bg-destructive'
+  if (severity === 'warning') return 'bg-warning'
+  return 'bg-primary'
 }

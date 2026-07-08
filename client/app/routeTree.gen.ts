@@ -20,6 +20,7 @@ import { Route as DashboardMapImport } from './routes/dashboard.map'
 import { Route as DashboardDevicesImport } from './routes/dashboard.devices'
 import { Route as DashboardAnalysisImport } from './routes/dashboard.analysis'
 import { Route as DashboardAlertsImport } from './routes/dashboard.alerts'
+import { Route as DashboardTripsTripIdImport } from './routes/dashboard.trips_.$tripId'
 
 // Create/Update Routes
 
@@ -74,6 +75,12 @@ const DashboardAnalysisRoute = DashboardAnalysisImport.update({
 const DashboardAlertsRoute = DashboardAlertsImport.update({
   id: '/alerts',
   path: '/alerts',
+  getParentRoute: () => DashboardRoute,
+} as any)
+
+const DashboardTripsTripIdRoute = DashboardTripsTripIdImport.update({
+  id: '/trips_/$tripId',
+  path: '/trips/$tripId',
   getParentRoute: () => DashboardRoute,
 } as any)
 
@@ -144,6 +151,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DashboardIndexImport
       parentRoute: typeof DashboardImport
     }
+    '/dashboard/trips_/$tripId': {
+      id: '/dashboard/trips_/$tripId'
+      path: '/trips/$tripId'
+      fullPath: '/dashboard/trips/$tripId'
+      preLoaderRoute: typeof DashboardTripsTripIdImport
+      parentRoute: typeof DashboardImport
+    }
   }
 }
 
@@ -157,6 +171,7 @@ interface DashboardRouteChildren {
   DashboardSettingsRoute: typeof DashboardSettingsRoute
   DashboardTripsRoute: typeof DashboardTripsRoute
   DashboardIndexRoute: typeof DashboardIndexRoute
+  DashboardTripsTripIdRoute: typeof DashboardTripsTripIdRoute
 }
 
 const DashboardRouteChildren: DashboardRouteChildren = {
@@ -167,6 +182,7 @@ const DashboardRouteChildren: DashboardRouteChildren = {
   DashboardSettingsRoute: DashboardSettingsRoute,
   DashboardTripsRoute: DashboardTripsRoute,
   DashboardIndexRoute: DashboardIndexRoute,
+  DashboardTripsTripIdRoute: DashboardTripsTripIdRoute,
 }
 
 const DashboardRouteWithChildren = DashboardRoute._addFileChildren(
@@ -183,6 +199,7 @@ export interface FileRoutesByFullPath {
   '/dashboard/settings': typeof DashboardSettingsRoute
   '/dashboard/trips': typeof DashboardTripsRoute
   '/dashboard/': typeof DashboardIndexRoute
+  '/dashboard/trips/$tripId': typeof DashboardTripsTripIdRoute
 }
 
 export interface FileRoutesByTo {
@@ -194,6 +211,7 @@ export interface FileRoutesByTo {
   '/dashboard/settings': typeof DashboardSettingsRoute
   '/dashboard/trips': typeof DashboardTripsRoute
   '/dashboard': typeof DashboardIndexRoute
+  '/dashboard/trips/$tripId': typeof DashboardTripsTripIdRoute
 }
 
 export interface FileRoutesById {
@@ -207,6 +225,7 @@ export interface FileRoutesById {
   '/dashboard/settings': typeof DashboardSettingsRoute
   '/dashboard/trips': typeof DashboardTripsRoute
   '/dashboard/': typeof DashboardIndexRoute
+  '/dashboard/trips_/$tripId': typeof DashboardTripsTripIdRoute
 }
 
 export interface FileRouteTypes {
@@ -221,6 +240,7 @@ export interface FileRouteTypes {
     | '/dashboard/settings'
     | '/dashboard/trips'
     | '/dashboard/'
+    | '/dashboard/trips/$tripId'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -231,6 +251,7 @@ export interface FileRouteTypes {
     | '/dashboard/settings'
     | '/dashboard/trips'
     | '/dashboard'
+    | '/dashboard/trips/$tripId'
   id:
     | '__root__'
     | '/'
@@ -242,6 +263,7 @@ export interface FileRouteTypes {
     | '/dashboard/settings'
     | '/dashboard/trips'
     | '/dashboard/'
+    | '/dashboard/trips_/$tripId'
   fileRoutesById: FileRoutesById
 }
 
@@ -281,7 +303,8 @@ export const routeTree = rootRoute
         "/dashboard/map",
         "/dashboard/settings",
         "/dashboard/trips",
-        "/dashboard/"
+        "/dashboard/",
+        "/dashboard/trips_/$tripId"
       ]
     },
     "/dashboard/alerts": {
@@ -310,6 +333,10 @@ export const routeTree = rootRoute
     },
     "/dashboard/": {
       "filePath": "dashboard.index.tsx",
+      "parent": "/dashboard"
+    },
+    "/dashboard/trips_/$tripId": {
+      "filePath": "dashboard.trips_.$tripId.tsx",
       "parent": "/dashboard"
     }
   }

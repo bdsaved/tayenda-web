@@ -1,0 +1,12 @@
+# Nginx Proxy Manager terminates HTTPS.
+# This Caddy instance is only an internal HTTP router for one-domain routing.
+:80 {
+  encode gzip zstd
+
+  reverse_proxy /api/* server:8000
+  reverse_proxy /docs* server:8000
+  reverse_proxy /openapi.json server:8000
+  reverse_proxy /health server:8000
+
+  reverse_proxy client:3000
+}

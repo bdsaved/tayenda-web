@@ -27,6 +27,12 @@ export type TripsResponse = {
   items: TripListItem[]
 }
 
+export type TripDetailResponse = {
+  trip: TripListItem
+  quality_flags: Record<string, unknown> | null
+  notes: string | null
+}
+
 export type HealthResponse = {
   status: string
 }
@@ -138,6 +144,10 @@ export async function fetchCurrentUser() {
 export async function fetchTrips(query?: string) {
   const search = query ? `?q=${encodeURIComponent(query)}` : ''
   return request<TripsResponse>(`/api/v1/trips${search}`)
+}
+
+export async function fetchTrip(tripId: string) {
+  return request<TripDetailResponse>(`/api/v1/trips/${encodeURIComponent(tripId)}`)
 }
 
 export async function uploadWebTrip(formData: FormData) {

@@ -1,8 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router'
-import { KeyRound, Server, ShieldCheck } from 'lucide-react'
 
-import { Badge } from '../components/ui/badge'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card'
+import { PageHeader } from '../components/ui/page-header'
 import { getApiBaseUrl } from '../lib/api'
 import { getStoredUser } from '../lib/auth'
 
@@ -15,64 +13,50 @@ function SettingsPage() {
 
   return (
     <div className="space-y-4">
-      <div>
-        <Badge>Settings</Badge>
-        <h2 className="mt-3 font-display text-3xl font-semibold tracking-tight">Deployment and access</h2>
-        <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
-          Current runtime details and the deployment decision for API/client packaging.
-        </p>
+      <PageHeader
+        title="Settings"
+        description="Current runtime details and deployment notes for this console."
+      />
+
+      <div className="flat-panel">
+        <div className="border-b border-border px-4 py-3">
+          <h2 className="text-base font-semibold text-foreground">Access</h2>
+        </div>
+        <dl className="divide-y divide-border">
+          <SettingRow label="Operator" value={user?.username ?? 'Unknown'} />
+          <SettingRow label="Email" value={user?.email ?? 'No email stored'} />
+          <SettingRow label="Role" value={user?.role ?? 'operator'} />
+          <SettingRow label="Auth mode" value="JWT bearer (mobile devices use API keys)" />
+          <SettingRow label="API base" value={getApiBaseUrl()} mono />
+        </dl>
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-3">
-        <InfoCard icon={ShieldCheck} title="Operator" value={user?.username ?? 'Unknown'} detail={user?.email ?? 'No email stored'} />
-        <InfoCard icon={Server} title="API base" value={getApiBaseUrl()} detail="Used by the browser client" />
-        <InfoCard icon={KeyRound} title="Auth mode" value="JWT bearer" detail="Mobile devices still use API keys" />
+      <div className="flat-panel">
+        <div className="border-b border-border px-4 py-3">
+          <h2 className="text-base font-semibold text-foreground">Deployment</h2>
+        </div>
+        <div className="space-y-3 px-4 py-4 text-sm leading-6 text-muted-foreground">
+          <p>
+            Because this client uses TanStack React Start/Vinxi, it is not just static files in the same
+            way a plain Vite app can be. Bundling it directly inside FastAPI would make SSR and routing
+            harder to operate.
+          </p>
+          <p>
+            The cleaner production shape is: FastAPI serves <span className="font-mono text-xs">/api</span>,
+            the client serves <span className="font-mono text-xs">/</span>, and Nginx/Caddy/Traefik routes
+            both under one domain with HTTPS.
+          </p>
+        </div>
       </div>
-
-      <Card className="glass-panel">
-        <CardHeader>
-          <CardTitle>Backend and client deployment</CardTitle>
-          <CardDescription>
-            Keep FastAPI and the JavaScript app as separate processes, then put one reverse proxy in front.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-3 text-sm leading-6 text-muted-foreground">
-          <p>
-            Because this client uses TanStack React Start/Vinxi, it is not just static files in the
-            same way a plain Vite app can be. Bundling it directly inside FastAPI would make SSR and
-            routing harder to operate.
-          </p>
-          <p>
-            The cleaner production shape is: FastAPI serves `/api`, the client serves `/`, and
-            Nginx/Caddy/Traefik routes both under one domain with HTTPS.
-          </p>
-        </CardContent>
-      </Card>
     </div>
   )
 }
 
-function InfoCard({
-  icon: Icon,
-  title,
-  value,
-  detail,
-}: {
-  icon: typeof ShieldCheck
-  title: string
-  value: string
-  detail: string
-}) {
+function SettingRow({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
   return (
-    <Card className="glass-panel">
-      <CardContent className="py-5">
-        <div className="inline-flex rounded-lg bg-accent p-2.5 text-primary">
-          <Icon className="size-5" />
-        </div>
-        <p className="mt-4 font-mono text-[11px] uppercase tracking-[0.16em] text-muted-foreground">{title}</p>
-        <p className="mt-2 break-words font-display text-lg font-semibold">{value}</p>
-        <p className="mt-1 text-sm text-muted-foreground">{detail}</p>
-      </CardContent>
-    </Card>
+    <div className="flex flex-col gap-1 px-4 py-3 sm:flex-row sm:items-baseline sm:justify-between">
+      <dt className="text-sm text-muted-foreground">{label}</dt>
+      <dd className={`text-sm text-foreground ${mono ? 'font-mono text-xs' : ''}`}>{value}</dd>
+    </div>
   )
 }

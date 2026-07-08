@@ -1,42 +1,64 @@
 services:
   db:
     image: postgres:16
+    restart: unless-stopped
     volumes:
       - postgres_data:/var/lib/postgresql/data
     environment:
       POSTGRES_DB: tayenda
       POSTGRES_USER: user
       POSTGRES_PASSWORD: password
-    ports:
-      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U user -d tayenda"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   server:
     build: ./server
+    restart: unless-stopped
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000
     volumes:
-      - ./server:/app
       - uploads_data:/app/storage
-    ports:
-      - "8000:8000"
+    expose:
+      - "8000"
     environment:
       DATABASE_URL: postgresql://user:password@db/tayenda
       SECRET_KEY: supersecretkey
       STORAGE_PATH: /app/storage
+      WEB_CLIENT_ORIGIN: https://${PUBLIC_DOMAIN:-tayenda.renai-labs.com}
       OPERATOR_USERNAME: admin
       OPERATOR_PASSWORD: tayenda-admin
       OPERATOR_EMAIL: brenalddzonzi@gmail.com
-      PUBLIC_WEB_ORIGIN: https://tayenda.renai-labs.com
+      PUBLIC_WEB_ORIGIN: https://${PUBLIC_DOMAIN:-tayenda.renai-labs.com}
     depends_on:
-      - db
+      db:
+        condition: service_healthy
 
   client:
-    build: ./client
-    ports:
-      - "3001:3000"
+    build:
+      context: ./client
+      args:
+        VITE_API_URL: https://${PUBLIC_DOMAIN:-tayenda.renai-labs.com}
+        VITE_PUBLIC_WEB_URL: https://${PUBLIC_DOMAIN:-tayenda.renai-labs.com}
+    restart: unless-stopped
+    expose:
+      - "3000"
     environment:
-      VITE_API_URL: https://api.tayenda.renai-labs.com
-      VITE_PUBLIC_WEB_URL: https://tayenda.renai-labs.com
+      VITE_API_URL: https://${PUBLIC_DOMAIN:-tayenda.renai-labs.com}
+      VITE_PUBLIC_WEB_URL: https://${PUBLIC_DOMAIN:-tayenda.renai-labs.com}
     depends_on:
+      - server
+
+  proxy:
+    image: caddy:2
+    restart: unless-stopped
+    ports:
+      - "${NPM_UPSTREAM_PORT:-3001}:80"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+    depends_on:
+      - client
       - server
 
 volumes:

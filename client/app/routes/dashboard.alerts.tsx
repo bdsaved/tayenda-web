@@ -1,9 +1,11 @@
 import { createFileRoute } from '@tanstack/react-router'
-import { AlertTriangle, CheckCircle2 } from 'lucide-react'
+import { CheckCircle2 } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 
 import { Badge } from '../components/ui/badge'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card'
+import { EmptyState } from '../components/ui/empty-state'
+import { Notice } from '../components/ui/notice'
+import { PageHeader } from '../components/ui/page-header'
 import { fetchTrips, type TripListItem } from '../lib/api'
 import { deriveAlerts } from '../lib/dashboard'
 
@@ -24,48 +26,51 @@ function AlertsPage() {
 
   return (
     <div className="space-y-4">
-      <div>
-        <Badge>Alerts</Badge>
-        <h2 className="mt-3 font-display text-3xl font-semibold tracking-tight">Troubleshooting queue</h2>
-        <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
-          A practical checklist for sync failures, short captures, and missing trip metadata.
-        </p>
-      </div>
+      <PageHeader
+        title="Alerts"
+        description="Sync failures, short captures, and missing trip metadata that need review."
+      />
 
-      {error ? <Card className="border-destructive/30 bg-destructive/5"><CardContent className="py-4 text-sm text-[hsl(2_70%_42%)]">{error}</CardContent></Card> : null}
+      {error ? <Notice tone="error">{error}</Notice> : null}
 
-      <div className="grid gap-4 xl:grid-cols-2">
-        {alerts.length === 0 ? (
-          <Card className="glass-panel xl:col-span-2">
-            <CardContent className="flex gap-3 py-8">
-              <CheckCircle2 className="size-5 text-primary" />
-              <div>
-                <p className="font-semibold">No active alerts</p>
-                <p className="mt-1 text-sm text-muted-foreground">The current trip set has no obvious operational issues.</p>
-              </div>
-            </CardContent>
-          </Card>
-        ) : (
-          alerts.map((alert) => (
-            <Card key={alert.id} className="glass-panel">
-              <CardHeader>
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex gap-3">
-                    <AlertTriangle className={`mt-1 size-5 ${alert.severity === 'critical' ? 'text-destructive' : 'text-[hsl(38_92%_42%)]'}`} />
-                    <div>
-                      <CardTitle>{alert.title}</CardTitle>
-                      <CardDescription>{alert.detail}</CardDescription>
-                    </div>
-                  </div>
-                  <Badge variant={alert.severity === 'critical' ? 'destructive' : alert.severity === 'warning' ? 'warning' : 'outline'}>
-                    {alert.severity}
-                  </Badge>
+      {alerts.length === 0 ? (
+        <EmptyState
+          icon={CheckCircle2}
+          title="No active alerts"
+          description="The current trip set has no obvious operational issues."
+        />
+      ) : (
+        <div className="flat-panel divide-y divide-border">
+          {alerts.map((alert) => (
+            <div key={alert.id} className="flex items-start justify-between gap-4 px-4 py-3.5">
+              <div className="flex gap-2.5">
+                <span className={`mt-1.5 size-2 shrink-0 rounded-full ${severityDot(alert.severity)}`} />
+                <div>
+                  <p className="text-sm font-medium text-foreground">{alert.title}</p>
+                  <p className="mt-0.5 text-sm leading-5 text-muted-foreground">{alert.detail}</p>
                 </div>
-              </CardHeader>
-            </Card>
-          ))
-        )}
-      </div>
+              </div>
+              <Badge
+                variant={
+                  alert.severity === 'critical'
+                    ? 'destructive'
+                    : alert.severity === 'warning'
+                      ? 'warning'
+                      : 'outline'
+                }
+              >
+                {alert.severity}
+              </Badge>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   )
+}
+
+function severityDot(severity: 'critical' | 'warning' | 'info') {
+  if (severity === 'critical') return 'bg-destructive'
+  if (severity === 'warning') return 'bg-warning'
+  return 'bg-primary'
 }

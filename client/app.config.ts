@@ -10,8 +10,5 @@ export default defineConfig({
         projects: ['./tsconfig.json'],
       }),
     ],
-    server: {
-      allowedHosts: ['tayenda.renai-labs.com'],
-    },
   },
 })

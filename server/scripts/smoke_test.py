@@ -1,26 +1,27 @@
 """End-to-end smoke test for the Tayenda API (standard library only).
 
-Exercises the real device -> manifest -> chunk -> finalize flow plus operator
-login and trip listing, so you can confirm a deployment is wired correctly.
+Exercises the real device -> manifest -> raw gzip upload -> processing flow
+plus operator login and trip listing, so you can confirm a deployment is wired
+correctly.
 
 Usage (from web/server/):
 
     # health only (safe against any environment)
-    python -m scripts.smoke_test --base-url https://api.tayenda.renai-labs.com
+    python -m scripts.smoke_test --base-url https://tayenda.renai-labs.com
 
     # full write flow against a LOCAL server (writes a test trip)
     python -m scripts.smoke_test --base-url http://localhost:8000 --full \
-        --username admin --password tayenda-admin
+        --username admin --password "$OPERATOR_PASSWORD"
 
 Notes:
   - --full writes a device + trip. Run it against a local/staging server, not
     production, unless you intend to leave test data behind.
-  - The chunk checksum uses the exact scheme the backend verifies:
-    sha256 of json.dumps(samples, separators=(",", ":"), ensure_ascii=False).
+  - The upload sends sha256 of the gzip bytes, which the backend verifies.
 """
 from __future__ import annotations
 
 import argparse
+import gzip
 import hashlib
 import json
 import os
@@ -51,9 +52,29 @@ def _request(method: str, url: str, *, body=None, headers=None):
             return exc.code, {"detail": payload}
 
 
-def chunk_checksum(samples: list[dict]) -> str:
-    payload = json.dumps(samples, separators=(",", ":"), ensure_ascii=False)
-    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+def _multipart(url: str, *, fields: dict, file_field: str, filename: str, file_bytes: bytes, headers=None):
+    boundary = uuid.uuid4().hex
+    crlf = "\r\n"
+    parts = []
+    for name, value in fields.items():
+        parts.append(
+            f'--{boundary}{crlf}Content-Disposition: form-data; name="{name}"{crlf}{crlf}{value}{crlf}'.encode()
+        )
+    parts.append(
+        f'--{boundary}{crlf}Content-Disposition: form-data; name="{file_field}"; filename="{filename}"{crlf}'
+        f"Content-Type: application/gzip{crlf}{crlf}".encode()
+        + file_bytes
+        + crlf.encode()
+    )
+    parts.append(f"--{boundary}--{crlf}".encode())
+    req = urllib.request.Request(url, data=b"".join(parts), method="POST", headers={
+        **(headers or {}), "Content-Type": f"multipart/form-data; boundary={boundary}",
+    })
+    try:
+        with urllib.request.urlopen(req, timeout=60) as resp:
+            return resp.status, json.loads(resp.read().decode("utf-8") or "{}")
+    except urllib.error.HTTPError as exc:
+        return exc.code, {"detail": exc.read().decode("utf-8")}
 
 
 def check(label: str, ok: bool, detail: str = "") -> bool:
@@ -67,7 +88,7 @@ def main() -> int:
     parser.add_argument("--base-url", default=DEFAULT_BASE_URL)
     parser.add_argument("--full", action="store_true", help="run the write flow (device + trip)")
     parser.add_argument("--username", default=os.getenv("OPERATOR_USERNAME", "admin"))
-    parser.add_argument("--password", default=os.getenv("OPERATOR_PASSWORD", "tayenda-admin"))
+    parser.add_argument("--password", default=os.getenv("OPERATOR_PASSWORD"))
     args = parser.parse_args()
 
     base = args.base_url.rstrip("/")
@@ -126,7 +147,7 @@ def main() -> int:
             "mount_type": "RIGID",
             "vehicle_type": "SUV",
             "road_surface": "GRAVEL",
-            "sampling_profile": "HIGH",
+            "sampling_profile": "BALANCED",
             "start_time": now_ms,
             "end_time": None,
             "total_samples": 0,
@@ -140,46 +161,37 @@ def main() -> int:
     if not check("trip manifest", status == 200 and body.get("status") == "accepted", f"{status} {body}"):
         failures += 1
 
-    # --- one chunk ---
-    samples = [
-        {
-            "ts": now_ms + i * 100,
-            "acc_device": [0.1, -0.04, 0.81],
-            "lat": -15.7861 + i * 0.0001,
-            "lon": 35.0058 + i * 0.0001,
-            "speed_mps": 12.0,
-            "gps_accuracy": 4.0,
-            "bearing": 90.0,
+    # --- raw trip upload (what the Android app does) ---
+    lon_step = 10.0 / 107_000  # ~10 m per second due east
+    samples = []
+    for i in range(30 * 50):  # 30 s at 50 Hz, 10 m/s
+        second = i // 50
+        samples.append({
+            "ts": now_ms + i * 20,
+            "lat": -15.7861,
+            "lon": round(35.0058 + second * lon_step, 7),
+            "spd": 10.0,
+            "gps_acc": 4.0,
+            "fix_ts": now_ms + second * 1000,
+            "acc_d": [0.0, 0.0, 0.4 if i % 2 else -0.4],
+            "rot": [0.0, 0.0, 0.0, 1.0, -1.0],
             "flags": 0,
-        }
-        for i in range(5)
-    ]
-    checksum = chunk_checksum(samples)
-    status, body = _request(
-        "POST",
-        f"{api}/trips/{trip_id}/chunks",
-        body={
-            "trip_id": trip_id,
-            "chunk_seq": 0,
-            "idempotency_key": hashlib.sha256(f"{trip_id}:0".encode()).hexdigest(),
-            "checksum": checksum,
-            "total_chunks": 1,
-            "sample_count": len(samples),
-            "samples": samples,
-        },
+        })
+    payload = gzip.compress("".join(json.dumps(s) + "\n" for s in samples).encode("utf-8"))
+    status, body = _multipart(
+        f"{api}/trips/{trip_id}/gzip",
+        fields={"total_samples": str(len(samples)), "sha256": hashlib.sha256(payload).hexdigest()},
+        file_field="file",
+        filename="trip.ndjson.gz",
+        file_bytes=payload,
         headers=dev_headers,
     )
-    if not check("chunk upload", status == 200 and body.get("status") == "accepted", f"{status} {body}"):
+    if not check("raw upload", status == 200 and body.get("samples_received") == len(samples), f"{status} {body}"):
         failures += 1
 
-    # --- finalize ---
-    status, body = _request(
-        "POST",
-        f"{api}/trips/{trip_id}/finalize",
-        body={"trip_id": trip_id, "total_chunks": 1, "total_samples": len(samples)},
-        headers=dev_headers,
-    )
-    if not check("finalize", status == 200 and body.get("status") == "completed", f"{status} {body}"):
+    # --- processed into road segments ---
+    status, body = _request("GET", f"{api}/trips/{trip_id}/upload-status", headers=dev_headers)
+    if not check("trip processed", status == 200 and body.get("status") == "UPLOADED", f"{status} {body}"):
         failures += 1
 
     # --- operator can see the trip ---

@@ -10,21 +10,21 @@
   "dependencies": {
     "@radix-ui/react-slot": "^1.2.4",
     "@tailwindcss/vite": "^4.2.2",
-    "@tanstack/react-query": "5.66.0",
     "@tanstack/react-router": "1.120.20",
     "@tanstack/react-start": "1.120.20",
-    "citty": "^0.2.2",
     "class-variance-authority": "^0.7.1",
     "clsx": "2.1.1",
+    "leaflet": "^1.9.4",
     "lucide-react": "0.475.0",
     "react": "19.2.5",
     "react-dom": "19.2.5",
+    "react-leaflet": "^5.0.0",
     "tailwind-merge": "3.5.0",
-    "vinxi": "0.5.11",
-    "zod": "3.25.76"
+    "vinxi": "0.5.11"
   },
   "devDependencies": {
     "@tanstack/router-plugin": "1.120.20",
+    "@types/leaflet": "^1.9.22",
     "@types/react": "19.2.14",
     "@types/react-dom": "19.2.3",
     "autoprefixer": "10.4.27",

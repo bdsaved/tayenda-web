@@ -1,36 +1,49 @@
 import { Link, Outlet, createFileRoute, useNavigate, useRouterState } from '@tanstack/react-router'
 import {
   Activity,
-  Bell,
+  AlertTriangle,
+  BarChart3,
   LayoutDashboard,
   LogOut,
   Map as MapIcon,
-  BarChart3,
   RefreshCw,
   Settings,
   Smartphone,
+  WifiOff,
   type LucideIcon,
 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 
 import { Badge } from '../components/ui/badge'
 import { Button } from '../components/ui/button'
-import { fetchCurrentUser, fetchHealth, type UserResponse } from '../lib/api'
-import { clearSession, isLoggedIn } from '../lib/auth'
+import { Notice } from '../components/ui/notice'
+import { fetchCurrentUser, fetchHealth, getApiBaseUrl, type UserResponse } from '../lib/api'
+import { clearSession, getStoredUser, isLoggedIn, storeUser } from '../lib/auth'
 
 export const Route = createFileRoute('/dashboard')({
   component: DashboardLayout,
 })
 
-const navItems = [
+type NavPath =
+  | '/dashboard'
+  | '/dashboard/map'
+  | '/dashboard/hazards'
+  | '/dashboard/trips'
+  | '/dashboard/devices'
+  | '/dashboard/analysis'
+  | '/dashboard/settings'
+
+const navItems: { to: NavPath; label: string; icon: LucideIcon }[] = [
   { to: '/dashboard', label: 'Overview', icon: LayoutDashboard },
+  { to: '/dashboard/map', label: 'Map', icon: MapIcon },
+  { to: '/dashboard/hazards', label: 'Hazards', icon: AlertTriangle },
   { to: '/dashboard/trips', label: 'Trips', icon: Activity },
   { to: '/dashboard/devices', label: 'Devices', icon: Smartphone },
-  { to: '/dashboard/map', label: 'Coverage', icon: MapIcon },
   { to: '/dashboard/analysis', label: 'Analysis', icon: BarChart3 },
-  { to: '/dashboard/alerts', label: 'Alerts', icon: Bell },
   { to: '/dashboard/settings', label: 'Settings', icon: Settings },
-] as const
+]
+
+const HEALTH_POLL_MS = 30_000
 
 function sectionTitle(pathname: string) {
   const match = [...navItems]
@@ -42,43 +55,48 @@ function sectionTitle(pathname: string) {
 function DashboardLayout() {
   const navigate = useNavigate()
   const pathname = useRouterState({ select: (state) => state.location.pathname })
-  const [authChecked, setAuthChecked] = useState(false)
+  const [ready, setReady] = useState(false)
   const [user, setUser] = useState<UserResponse | null>(null)
-  const [health, setHealth] = useState('checking')
+  const [online, setOnline] = useState<boolean | null>(null)
 
+  // Session gate. A 401 anywhere is handled centrally in lib/api (clears the
+  // session and returns to login), so network failures never log the user out.
   useEffect(() => {
     if (!isLoggedIn()) {
-      clearSession()
-      void navigate({ to: '/' })
+      void navigate({ to: '/', replace: true })
       return
     }
+    setUser(getStoredUser())
+    setReady(true)
+    fetchCurrentUser()
+      .then((current) => {
+        setUser(current)
+        storeUser(current)
+      })
+      .catch(() => undefined)
+  }, [navigate])
 
+  useEffect(() => {
+    if (!ready) return
     let cancelled = false
-
-    void Promise.all([fetchCurrentUser(), fetchHealth()])
-      .then(([currentUser, healthResponse]) => {
-        if (cancelled) return
-        setUser(currentUser)
-        setHealth(healthResponse.status)
-        setAuthChecked(true)
-      })
-      .catch(() => {
-        if (cancelled) return
-        clearSession()
-        void navigate({ to: '/' })
-      })
-
+    const check = () =>
+      fetchHealth()
+        .then(() => !cancelled && setOnline(true))
+        .catch(() => !cancelled && setOnline(false))
+    void check()
+    const timer = setInterval(check, HEALTH_POLL_MS)
     return () => {
       cancelled = true
+      clearInterval(timer)
     }
-  }, [navigate])
+  }, [ready])
 
   function logout() {
     clearSession()
     void navigate({ to: '/' })
   }
 
-  if (!authChecked) {
+  if (!ready) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background px-4">
         <div className="text-center">
@@ -86,15 +104,16 @@ function DashboardLayout() {
             T
           </div>
           <p className="text-sm font-medium text-foreground">Checking session</p>
-          <p className="mt-1 text-xs text-muted-foreground">Preparing the operator console.</p>
         </div>
       </div>
     )
   }
 
+  const displayName = user?.full_name || user?.username || 'Operator'
+
   return (
     <div className="min-h-screen bg-background">
-      <div className="grid min-h-screen lg:grid-cols-[240px_minmax(0,1fr)]">
+      <div className="grid min-h-screen lg:grid-cols-[220px_minmax(0,1fr)]">
         <aside className="hidden min-h-screen flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground lg:flex">
           <div className="flex items-center gap-2.5 border-b border-sidebar-border px-4 py-4">
             <div className="flex size-8 items-center justify-center rounded-md bg-primary text-sm font-bold text-primary-foreground">
@@ -115,13 +134,11 @@ function DashboardLayout() {
           <div className="mt-auto border-t border-sidebar-border p-3">
             <div className="mb-2 flex items-center gap-2.5 rounded-md border border-border bg-card px-3 py-2.5">
               <div className="flex size-8 items-center justify-center rounded-full bg-accent text-sm font-semibold text-accent-foreground">
-                {(user?.full_name ?? user?.username ?? 'O').slice(0, 1).toUpperCase()}
+                {displayName.slice(0, 1).toUpperCase()}
               </div>
               <div className="min-w-0">
-                <p className="truncate text-sm font-medium text-foreground">
-                  {user?.full_name ?? user?.username ?? 'Operator'}
-                </p>
-                <p className="truncate text-xs text-muted-foreground">{user?.email ?? 'Signed in'}</p>
+                <p className="truncate text-sm font-medium text-foreground">{displayName}</p>
+                <p className="truncate text-xs text-muted-foreground">{user?.role ?? 'operator'}</p>
               </div>
             </div>
             <Button variant="ghost" size="sm" className="w-full justify-start" onClick={logout}>
@@ -140,15 +157,18 @@ function DashboardLayout() {
               <h1 className="text-base font-semibold text-foreground">{sectionTitle(pathname)}</h1>
             </div>
             <div className="flex items-center gap-2">
-              <Badge variant={health === 'healthy' ? 'success' : 'warning'}>
+              <Badge variant={online === false ? 'destructive' : online ? 'success' : 'outline'}>
                 <span
-                  className={`size-1.5 rounded-full ${health === 'healthy' ? 'bg-success live-dot' : 'bg-warning'}`}
+                  className={`size-1.5 rounded-full ${online === false ? 'bg-destructive' : online ? 'bg-success live-dot' : 'bg-muted-foreground'}`}
                 />
-                API {health}
+                {online === false ? 'API offline' : online ? 'API online' : 'Checking API'}
               </Badge>
-              <Button variant="ghost" size="sm" onClick={() => window.location.reload()}>
+              <Button variant="ghost" size="sm" onClick={() => window.location.reload()} aria-label="Refresh">
                 <RefreshCw className="size-4" />
-                Refresh
+                <span className="hidden sm:inline">Refresh</span>
+              </Button>
+              <Button variant="ghost" size="sm" className="lg:hidden" onClick={logout} aria-label="Sign out">
+                <LogOut className="size-4" />
               </Button>
             </div>
           </header>
@@ -161,6 +181,16 @@ function DashboardLayout() {
                 ))}
               </div>
 
+              {online === false ? (
+                <Notice tone="warning" className="mb-4 flex items-start gap-2">
+                  <WifiOff className="mt-0.5 size-4 shrink-0" />
+                  <span>
+                    Can't reach the API at <span className="font-mono text-xs">{getApiBaseUrl()}</span>. Data shown may be
+                    stale; retrying every 30 seconds.
+                  </span>
+                </Notice>
+              ) : null}
+
               <Outlet />
             </div>
           </main>
@@ -170,22 +200,7 @@ function DashboardLayout() {
   )
 }
 
-function SidebarItem({
-  to,
-  icon: Icon,
-  label,
-}: {
-  to:
-    | '/dashboard'
-    | '/dashboard/map'
-    | '/dashboard/analysis'
-    | '/dashboard/trips'
-    | '/dashboard/devices'
-    | '/dashboard/alerts'
-    | '/dashboard/settings'
-  icon: LucideIcon
-  label: string
-}) {
+function SidebarItem({ to, icon: Icon, label }: { to: NavPath; icon: LucideIcon; label: string }) {
   return (
     <Link
       to={to}
@@ -204,20 +219,7 @@ function SidebarItem({
   )
 }
 
-function SidebarChip({
-  to,
-  label,
-}: {
-  to:
-    | '/dashboard'
-    | '/dashboard/map'
-    | '/dashboard/analysis'
-    | '/dashboard/trips'
-    | '/dashboard/devices'
-    | '/dashboard/alerts'
-    | '/dashboard/settings'
-  label: string
-}) {
+function SidebarChip({ to, label }: { to: NavPath; label: string }) {
   return (
     <Link
       to={to}

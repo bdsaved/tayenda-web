@@ -1,10 +1,11 @@
+"""Background processing of uploaded trips into road segments and hazards."""
 from __future__ import annotations
 
 import asyncio
 import gzip
 import json
 import logging
-import zlib
+import threading
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
@@ -13,11 +14,19 @@ from sqlalchemy.orm import Session
 
 from .config import settings
 from .db import SessionLocal
-from ..models.models import Trip
-
+from .roughness import PROCESSING_VERSION, TripAnalysis, read_and_analyse
+from ..models.models import Hazard, RoadSegment, Trip, TripTrack
 
 logger = logging.getLogger(__name__)
 
+RAW_FILENAME = "trip.ndjson.gz"
+LEGACY_BUNDLE_FILENAME = "trip-bundle.json"
+# Statuses that mean the raw file has fully arrived.
+RECEIVED_STATUSES = ("STORED", "PROCESSING", "UPLOADED", "FAILED")
+
+# Processing runs from the background loop and from request handlers
+# (upload, reprocess); one trip at a time keeps memory use predictable.
+_processing_lock = threading.Lock()
 
 _PROCESSING_HEALTH: dict[str, Any] = {
     "status": "idle",
@@ -29,17 +38,39 @@ _PROCESSING_HEALTH: dict[str, Any] = {
 }
 
 
+def now_ms() -> int:
+    return int(datetime.now(timezone.utc).timestamp() * 1000)
+
+
+def trip_dir(trip_id: str) -> Path:
+    return settings.resolved_storage_path / trip_id
+
+
+def raw_path(trip_id: str) -> Path:
+    return trip_dir(trip_id) / RAW_FILENAME
+
+
+def get_processing_health() -> dict[str, Any]:
+    return dict(_PROCESSING_HEALTH)
+
+
 async def run_processing_loop(stop_event: asyncio.Event) -> None:
     while not stop_event.is_set():
-        processed = process_pending_gzip_trips()
-        cleaned = cleanup_old_gzip_files()
-        now_ms = int(datetime.now(timezone.utc).timestamp() * 1000)
+        try:
+            processed = await asyncio.to_thread(process_pending_trips)
+            cleaned = await asyncio.to_thread(cleanup_old_raw_files)
+        except Exception:  # noqa: BLE001 - keep the loop alive and visible in health
+            logger.exception("Processing loop iteration failed")
+            processed, cleaned = 0, 0
+            _PROCESSING_HEALTH["status"] = "error"
+        else:
+            _PROCESSING_HEALTH["status"] = "running"
+        now = now_ms()
         _PROCESSING_HEALTH.update(
             {
-                "status": "running",
                 "interval_seconds": settings.PROCESS_INTERVAL_SECONDS,
-                "last_run_at": now_ms,
-                "next_run_at": now_ms + settings.PROCESS_INTERVAL_SECONDS * 1000,
+                "last_run_at": now,
+                "next_run_at": now + settings.PROCESS_INTERVAL_SECONDS * 1000,
                 "processed_trips_last_run": processed,
                 "cleaned_files_last_run": cleaned,
             }
@@ -50,123 +81,231 @@ async def run_processing_loop(stop_event: asyncio.Event) -> None:
             continue
 
 
-def get_processing_health() -> dict[str, Any]:
-    return dict(_PROCESSING_HEALTH)
-
-
-def process_pending_gzip_trips() -> int:
+def process_pending_trips() -> int:
     db: Session = SessionLocal()
-    processed_count = 0
     try:
-        pending = (
-            db.query(Trip)
-            .filter(Trip.upload_source == "mobile", Trip.status.in_(["STORED", "UPLOADING"]))
+        trip_ids = [
+            trip_id
+            for (trip_id,) in db.query(Trip.trip_id)
+            .filter(
+                Trip.status.in_(RECEIVED_STATUSES),
+                Trip.processing_version < PROCESSING_VERSION,
+            )
+            .order_by(Trip.start_time.asc())
             .all()
-        )
-
-        for trip in pending:
-            trip_dir = settings.resolved_storage_path / trip.trip_id
-            gzip_path = trip_dir / "trip.ndjson.gz"
-            manifest_path = trip_dir / "manifest.json"
-            figures_path = trip_dir / "figures.json"
-
-            if not gzip_path.exists():
-                continue
-
-            trip.status = "PROCESSING"
-
-            try:
-                metrics = compute_gzip_metrics(gzip_path)
-                manifest_payload = load_manifest(manifest_path)
-
-                figures_payload = {
-                    "trip_id": trip.trip_id,
-                    "processed_at": int(datetime.now(timezone.utc).timestamp() * 1000),
-                    "metrics": metrics,
-                    "manifest": manifest_payload,
-                }
-                figures_path.write_text(
-                    json.dumps(figures_payload, separators=(",", ":"), ensure_ascii=False),
-                    encoding="utf-8",
-                )
-
-                trip.total_samples_received = metrics["samples_received"]
-                trip.total_chunks_expected = 1
-                trip.total_chunks_received = 1
-                trip.total_samples = max(trip.total_samples, metrics["samples_received"])
-                trip.avg_speed = metrics["avg_speed_mps"]
-                trip.status = "UPLOADED"
-                trip.finalized_at = datetime.now(timezone.utc)
-                trip.artifact_path = str(figures_path)
-                processed_count += 1
-            except (gzip.BadGzipFile, OSError, EOFError, json.JSONDecodeError, UnicodeDecodeError, ValueError, zlib.error) as exc:
-                trip.status = "FAILED"
-                trip.notes = f"Processing failed: {exc.__class__.__name__}"
-                logger.warning("Failed to process trip %s from %s: %s", trip.trip_id, gzip_path, exc)
-
-        db.commit()
+        ]
     finally:
         db.close()
-    return processed_count
+
+    processed = 0
+    for trip_id in trip_ids:
+        if process_trip(trip_id):
+            processed += 1
+    return processed
 
 
-def cleanup_old_gzip_files() -> int:
+def process_trip(trip_id: str) -> bool:
+    """Analyse one trip and replace its stored segments and hazards.
+
+    Returns True when the trip was analysed successfully.
+    """
+    with _processing_lock:
+        db: Session = SessionLocal()
+        try:
+            trip = db.get(Trip, trip_id)
+            if trip is None:
+                return False
+
+            path = raw_path(trip_id)
+            if not path.exists():
+                _convert_legacy_bundle(trip_id)
+            if not path.exists():
+                # Raw data was never received or is past retention. Record that
+                # so the trip is not re-checked on every run.
+                trip.processing_version = PROCESSING_VERSION
+                if trip.status in ("STORED", "PROCESSING"):
+                    trip.status = "FAILED"
+                    trip.notes = "Raw trip file is missing on the server."
+                db.commit()
+                return False
+
+            trip.status = "PROCESSING"
+            db.commit()
+
+            try:
+                analysis = read_and_analyse(path)
+            except OSError as exc:
+                logger.warning("Could not read trip %s: %s", trip_id, exc)
+                _mark_failed(db, trip, f"Could not read raw file: {exc.__class__.__name__}")
+                return False
+
+            if analysis.samples == 0:
+                _mark_failed(db, trip, "No readable sensor samples in the uploaded file.")
+                return False
+
+            _store_analysis(db, trip, analysis, path)
+            db.commit()
+            return True
+        except Exception:
+            db.rollback()
+            logger.exception("Processing trip %s failed", trip_id)
+            try:
+                trip = db.get(Trip, trip_id)
+                if trip is not None:
+                    _mark_failed(db, trip, "Processing error; see server logs.")
+            except Exception:  # noqa: BLE001
+                db.rollback()
+            return False
+        finally:
+            db.close()
+
+
+def _mark_failed(db: Session, trip: Trip, note: str) -> None:
+    trip.status = "FAILED"
+    trip.notes = note
+    trip.processing_version = PROCESSING_VERSION
+    db.commit()
+
+
+def _store_analysis(db: Session, trip: Trip, analysis: TripAnalysis, path: Path) -> None:
+    db.query(RoadSegment).filter(RoadSegment.trip_id == trip.trip_id).delete(synchronize_session=False)
+    db.query(Hazard).filter(Hazard.trip_id == trip.trip_id).delete(synchronize_session=False)
+    db.query(TripTrack).filter(TripTrack.trip_id == trip.trip_id).delete(synchronize_session=False)
+    if analysis.track:
+        db.add(
+            TripTrack(
+                trip_id=trip.trip_id,
+                parts=[[list(point) for point in part] for part in analysis.track],
+                point_count=sum(len(part) for part in analysis.track),
+                distance_m=analysis.distance_m,
+                start_ts=analysis.track[0][0][2],
+                end_ts=analysis.track[-1][-1][2],
+            )
+        )
+
+    db.add_all(
+        RoadSegment(
+            trip_id=trip.trip_id,
+            seq=s.seq,
+            start_ts=s.start_ts,
+            length_m=s.length_m,
+            distance_from_start_m=s.distance_from_start_m,
+            avg_speed=s.avg_speed,
+            sample_count=s.sample_count,
+            roughness=s.roughness,
+            condition=s.condition,
+            coordinates=s.coordinates,
+        )
+        for s in analysis.segments
+    )
+    db.add_all(
+        Hazard(
+            trip_id=trip.trip_id,
+            ts=h.ts,
+            lat=h.lat,
+            lon=h.lon,
+            source=h.source,
+            kind=h.kind,
+            magnitude=h.magnitude,
+            speed=h.speed,
+        )
+        for h in analysis.hazards
+    )
+
+    by_condition = analysis.length_by_condition()
+    trip.total_samples_received = analysis.samples
+    trip.total_samples = analysis.samples
+    trip.total_chunks_expected = 1
+    trip.total_chunks_received = 1
+    if analysis.distance_m > 0:
+        trip.total_distance = analysis.distance_m
+    trip.avg_speed = round(analysis.avg_speed, 3)
+    if trip.end_time is None and analysis.last_ts is not None:
+        trip.end_time = analysis.last_ts
+    trip.roughness_avg = round(analysis.roughness_avg, 4) if analysis.roughness_avg is not None else None
+    trip.good_m = round(by_condition["GOOD"], 1)
+    trip.fair_m = round(by_condition["FAIR"], 1)
+    trip.poor_m = round(by_condition["POOR"], 1)
+    trip.hazard_count = analysis.jolt_count
+    trip.tag_count = analysis.tags
+    trip.status = "UPLOADED"
+    trip.processed_at = datetime.now(timezone.utc)
+    trip.finalized_at = trip.finalized_at or trip.processed_at
+    trip.processing_version = PROCESSING_VERSION
+    trip.artifact_path = str(path)
+
+    notes = []
+    if analysis.damaged or analysis.bad_lines:
+        notes.append(
+            f"Recovered {analysis.samples:,} samples from a damaged file"
+            + (f" ({analysis.bad_lines} unreadable lines skipped)." if analysis.bad_lines else ".")
+        )
+    if analysis.duplicates_dropped:
+        notes.append(f"Dropped {analysis.duplicates_dropped:,} duplicate samples.")
+    if not analysis.segments:
+        notes.append("No road segments: the trip had no usable GPS track above walking speed.")
+    # Web uploads carry the operator's own notes; keep those.
+    if trip.upload_source != "web":
+        trip.notes = " ".join(notes) or None
+
+
+def _convert_legacy_bundle(trip_id: str) -> None:
+    """Older web/chunk uploads were stored as a JSON bundle; rewrite as NDJSON gzip."""
+    bundle_path = trip_dir(trip_id) / LEGACY_BUNDLE_FILENAME
+    if not bundle_path.exists():
+        return
+    try:
+        bundle = json.loads(bundle_path.read_text(encoding="utf-8"))
+        chunks = sorted(bundle.get("chunks") or [], key=lambda c: c.get("chunk_seq", 0))
+        write_samples_gzip(
+            raw_path(trip_id),
+            (sample for chunk in chunks for sample in (chunk.get("samples") or [])),
+        )
+    except (OSError, ValueError) as exc:
+        logger.warning("Could not convert legacy bundle for %s: %s", trip_id, exc)
+
+
+def write_samples_gzip(path: Path, samples) -> int:
+    """Write sample dicts as NDJSON gzip atomically. Returns the line count."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(".tmp")
+    count = 0
+    with gzip.open(tmp, "wt", encoding="utf-8") as fp:
+        for sample in samples:
+            fp.write(json.dumps(sample, separators=(",", ":"), ensure_ascii=False))
+            fp.write("\n")
+            count += 1
+    tmp.replace(path)
+    return count
+
+
+def cleanup_old_raw_files() -> int:
+    """Delete raw files of processed trips once they pass the retention window.
+
+    Segments and hazards live in the database, so the map is unaffected.
+    """
     if settings.RAW_RETENTION_DAYS <= 0:
         return 0
 
     cutoff = datetime.now(timezone.utc) - timedelta(days=settings.RAW_RETENTION_DAYS)
+    db: Session = SessionLocal()
     cleaned = 0
-    for trip_dir in settings.resolved_storage_path.iterdir() if settings.resolved_storage_path.exists() else []:
-        if not trip_dir.is_dir():
+    try:
+        processed_ids = {
+            trip_id
+            for (trip_id,) in db.query(Trip.trip_id).filter(
+                Trip.status == "UPLOADED", Trip.processing_version >= PROCESSING_VERSION
+            )
+        }
+    finally:
+        db.close()
+
+    for trip_id in processed_ids:
+        path = raw_path(trip_id)
+        if not path.exists():
             continue
-        gzip_path = trip_dir / "trip.ndjson.gz"
-        if not gzip_path.exists():
-            continue
-        modified = datetime.fromtimestamp(gzip_path.stat().st_mtime, tz=timezone.utc)
+        modified = datetime.fromtimestamp(path.stat().st_mtime, tz=timezone.utc)
         if modified < cutoff:
-            gzip_path.unlink(missing_ok=True)
+            path.unlink(missing_ok=True)
             cleaned += 1
     return cleaned
-
-
-def load_manifest(path: Path) -> dict:
-    if not path.exists():
-        return {}
-    try:
-        return json.loads(path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError:
-        return {}
-
-
-def compute_gzip_metrics(path: Path) -> dict[str, float | int]:
-    samples = 0
-    speed_total = 0.0
-    speed_count = 0
-    speed_max = 0.0
-
-    with gzip.open(path, mode="rt", encoding="utf-8") as fp:
-        for line in fp:
-            line = line.strip()
-            if not line:
-                continue
-            samples += 1
-            try:
-                item = json.loads(line)
-            except json.JSONDecodeError:
-                continue
-            speed = item.get("spd")
-            if speed is None:
-                speed = item.get("speed_mps")
-            if isinstance(speed, (int, float)):
-                speed_f = float(speed)
-                speed_total += speed_f
-                speed_count += 1
-                speed_max = max(speed_max, speed_f)
-
-    avg_speed = (speed_total / speed_count) if speed_count else 0.0
-
-    return {
-        "samples_received": samples,
-        "avg_speed_mps": avg_speed,
-        "max_speed_mps": speed_max,
-    }

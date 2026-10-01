@@ -14,7 +14,7 @@ That exposes Postgres on `localhost:5432`.
 
 ## 2. Configure the Python server
 
-Copy `server/.env.example` to `server/.env` and keep the database URL pointed at your local Docker container:
+Copy `server/.env.example` to `server/.env` and keep the database URL pointed at your local Docker container. Development defaults are fine locally; the server logs a warning about them:
 
 ```env
 DATABASE_URL=postgresql://user:password@localhost:5432/tayenda
@@ -52,4 +52,18 @@ or
 ngrok http 8000
 ```
 
-If you expose the API through ngrok, update `NGROK_ORIGIN` in `server/.env` and `VITE_NGROK_URL` in `client/.env` to match the public ngrok URL.
+If you expose the API through ngrok, set `NGROK_ORIGIN` in `server/.env` to the public ngrok URL (for CORS) and `VITE_API_URL` in `client/.env` if the dashboard should call the API through it.
+
+The Android app needs HTTPS, so for a phone on the same network build it with
+`-PtayendaBaseUrl=https://<your-ngrok-host>/` pointing at the API (port 8000).
+
+## 5. Tests
+
+From `web/server/`:
+
+```powershell
+pip install -r requirements-dev.txt
+python -m pytest
+```
+
+The tests use a temporary SQLite database and need neither Docker nor Postgres.

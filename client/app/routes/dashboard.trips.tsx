@@ -1,7 +1,9 @@
 import { Link, createFileRoute } from '@tanstack/react-router'
-import { Download, FileUp, Inbox, LoaderCircle, Search, X } from 'lucide-react'
-import { type ChangeEvent, type FormEvent, type ReactNode, startTransition, useDeferredValue, useEffect, useState } from 'react'
+import { ChevronLeft, ChevronRight, FileUp, Inbox, LoaderCircle, Search, X } from 'lucide-react'
+import { type FormEvent, type ReactNode, useState } from 'react'
 
+import { ConditionBar } from '../components/condition-bar'
+import { DownloadButton } from '../components/download-button'
 import { Badge } from '../components/ui/badge'
 import { Button } from '../components/ui/button'
 import { EmptyState } from '../components/ui/empty-state'
@@ -11,11 +13,232 @@ import { PageHeader } from '../components/ui/page-header'
 import { Select } from '../components/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table'
 import { Textarea } from '../components/ui/textarea'
-import { fetchTrips, getTripDownloadUrl, type TripListItem, uploadWebTrip } from '../lib/api'
+import { errorMessage, exportTripsCsv, fetchTrips, type TripFilters, uploadWebTrip } from '../lib/api'
+import {
+  TRIP_STATUSES,
+  dateInputToMs,
+  formatDate,
+  formatDistance,
+  formatRoughness,
+  statusLabel,
+  statusVariant,
+} from '../lib/format'
+import { useApi, useDebouncedValue } from '../lib/hooks'
 
 export const Route = createFileRoute('/dashboard/trips')({
   component: TripsPage,
 })
+
+const PAGE_SIZE = 50
+
+function TripsPage() {
+  const [query, setQuery] = useState('')
+  const debouncedQuery = useDebouncedValue(query.trim(), 300)
+  const [status, setStatus] = useState('')
+  const [sinceDay, setSinceDay] = useState('')
+  const [untilDay, setUntilDay] = useState('')
+  const [showUpload, setShowUpload] = useState(false)
+  const [notice, setNotice] = useState<{ tone: 'success' | 'error'; text: string } | null>(null)
+
+  const filters: TripFilters = {
+    q: debouncedQuery || undefined,
+    status: status || undefined,
+    since: dateInputToMs(sinceDay, 'start'),
+    until: dateInputToMs(untilDay, 'end'),
+  }
+
+  // The page number belongs to one filter combination; changing filters returns to page 1
+  // without a wasted request for the old page.
+  const filterKey = `${debouncedQuery}|${status}|${sinceDay}|${untilDay}`
+  const [pageState, setPageState] = useState({ key: filterKey, page: 0 })
+  const page = pageState.key === filterKey ? pageState.page : 0
+  const setPage = (next: number) => setPageState({ key: filterKey, page: next })
+
+  const trips = useApi(
+    () => fetchTrips({ ...filters, limit: PAGE_SIZE, offset: page * PAGE_SIZE }),
+    [filterKey, page],
+  )
+
+  const items = trips.data?.items ?? []
+  const total = trips.data?.total ?? 0
+  const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE))
+  const firstRow = total === 0 ? 0 : page * PAGE_SIZE + 1
+  const lastRow = Math.min(total, (page + 1) * PAGE_SIZE)
+  const hasFilters = Boolean(query || status || sinceDay || untilDay)
+
+  return (
+    <div className="space-y-4">
+      <PageHeader
+        title="Trips"
+        description="Trips synced from the field app and manual web imports."
+        actions={
+          <>
+            <DownloadButton
+              label="Export CSV"
+              download={() => exportTripsCsv(filters)}
+              onError={(message) => setNotice(message ? { tone: 'error', text: message } : null)}
+            />
+            <Button size="sm" variant={showUpload ? 'secondary' : 'default'} onClick={() => setShowUpload((open) => !open)}>
+              {showUpload ? <X className="size-4" /> : <FileUp className="size-4" />}
+              {showUpload ? 'Close upload' : 'Upload trip'}
+            </Button>
+          </>
+        }
+      />
+
+      {notice ? <Notice tone={notice.tone}>{notice.text}</Notice> : null}
+
+      {showUpload ? (
+        <UploadForm
+          onUploaded={(message) => {
+            setNotice({ tone: 'success', text: message })
+            setShowUpload(false)
+            trips.reload()
+          }}
+        />
+      ) : null}
+
+      {trips.error ? <Notice tone="error">{trips.error}</Notice> : null}
+
+      <div className="flat-panel overflow-hidden">
+        <div className="flex flex-wrap items-end gap-3 border-b border-border px-4 py-3">
+          <div className="relative w-full sm:w-64">
+            <Search className="absolute left-3 top-2.5 size-4 text-muted-foreground" />
+            <Input
+              placeholder="Search trip, device, operator"
+              className="pl-9"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              aria-label="Search trips"
+            />
+          </div>
+          <Select value={status} onChange={(event) => setStatus(event.target.value)} className="w-auto" aria-label="Status">
+            <option value="">All statuses</option>
+            {TRIP_STATUSES.map((value) => (
+              <option key={value} value={value}>
+                {statusLabel(value)}
+              </option>
+            ))}
+          </Select>
+          <label className="flex items-center gap-2 text-sm text-muted-foreground">
+            From
+            <Input type="date" value={sinceDay} onChange={(event) => setSinceDay(event.target.value)} className="w-auto" />
+          </label>
+          <label className="flex items-center gap-2 text-sm text-muted-foreground">
+            To
+            <Input type="date" value={untilDay} onChange={(event) => setUntilDay(event.target.value)} className="w-auto" />
+          </label>
+          {hasFilters ? (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                setQuery('')
+                setStatus('')
+                setSinceDay('')
+                setUntilDay('')
+              }}
+            >
+              Clear
+            </Button>
+          ) : null}
+          <p className="ml-auto text-sm text-muted-foreground tabular-nums">
+            {trips.loading ? 'Loading...' : `${firstRow.toLocaleString()}–${lastRow.toLocaleString()} of ${total.toLocaleString()}`}
+          </p>
+        </div>
+
+        {trips.loading && !trips.data ? (
+          <p className="px-4 py-8 text-sm text-muted-foreground">Loading trips...</p>
+        ) : items.length === 0 ? (
+          <EmptyState
+            icon={Inbox}
+            title={hasFilters ? 'No trips match these filters' : 'No trips yet'}
+            description="Trips synced from the field app or uploaded here will appear in this list."
+            className="m-4"
+          />
+        ) : (
+          <Table className={trips.loading ? 'opacity-60' : undefined}>
+            <TableHeader>
+              <TableRow className="hover:bg-transparent">
+                <TableHead>Start</TableHead>
+                <TableHead>Device</TableHead>
+                <TableHead>Operator</TableHead>
+                <TableHead className="text-right">Distance</TableHead>
+                <TableHead>Condition</TableHead>
+                <TableHead className="text-right">Avg roughness</TableHead>
+                <TableHead className="text-right">Hazards</TableHead>
+                <TableHead>Status</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {items.map((trip) => (
+                <TableRow key={trip.trip_id}>
+                  <TableCell className="whitespace-nowrap">
+                    <Link
+                      to="/dashboard/trips/$tripId"
+                      params={{ tripId: trip.trip_id }}
+                      className="font-medium text-primary hover:underline"
+                    >
+                      {formatDate(trip.start_time)}
+                    </Link>
+                    <p className="font-mono text-[11px] text-muted-foreground">{trip.trip_id}</p>
+                  </TableCell>
+                  <TableCell>
+                    <p className="text-sm text-foreground">{trip.device_model ?? 'Unknown device'}</p>
+                    <p className="max-w-[160px] truncate font-mono text-[11px] text-muted-foreground">{trip.device_id}</p>
+                  </TableCell>
+                  <TableCell className="text-muted-foreground">
+                    <p>{trip.operator_name ?? '—'}</p>
+                    <p className="text-xs">{trip.upload_source}</p>
+                  </TableCell>
+                  <TableCell className="whitespace-nowrap text-right tabular-nums">{formatDistance(trip.total_distance)}</TableCell>
+                  <TableCell>
+                    <ConditionBar good={trip.good_m} fair={trip.fair_m} poor={trip.poor_m} unit="m" />
+                  </TableCell>
+                  <TableCell className="whitespace-nowrap text-right tabular-nums">{formatRoughness(trip.roughness_avg)}</TableCell>
+                  <TableCell className="whitespace-nowrap text-right tabular-nums">
+                    <span title="Detected jolts">{trip.hazard_count}</span>
+                    <span className="text-muted-foreground"> + </span>
+                    <span title="Driver-tagged hazards">{trip.tag_count}</span>
+                    <p className="text-[11px] text-muted-foreground">detected + tagged</p>
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant={statusVariant(trip.status)}>{statusLabel(trip.status)}</Badge>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        )}
+
+        {total > PAGE_SIZE ? (
+          <div className="flex items-center justify-end gap-2 border-t border-border px-4 py-2.5">
+            <span className="mr-2 text-sm text-muted-foreground tabular-nums">
+              Page {page + 1} of {pageCount}
+            </span>
+            <Button variant="outline" size="sm" disabled={page === 0 || trips.loading} onClick={() => setPage(page - 1)}>
+              <ChevronLeft className="size-4" />
+              Prev
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={page + 1 >= pageCount || trips.loading}
+              onClick={() => setPage(page + 1)}
+            >
+              Next
+              <ChevronRight className="size-4" />
+            </Button>
+          </div>
+        ) : null}
+      </div>
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Manual upload
+// ---------------------------------------------------------------------------
 
 type UploadFormState = {
   tripId: string
@@ -28,390 +251,176 @@ type UploadFormState = {
   samplingProfile: string
   startTime: string
   endTime: string
-  totalDistance: string
-  avgSpeed: string
   mountQuality: string
   notes: string
 }
 
-const DEFAULT_FORM: UploadFormState = {
-  tripId: '',
-  deviceId: 'web-device-01',
-  deviceModel: 'Browser Upload',
-  collectorName: '',
-  mountType: 'RIGID',
-  vehicleType: 'SUV',
-  roadSurface: 'PAVED',
-  samplingProfile: 'BALANCED',
-  startTime: toDateTimeLocal(new Date()),
-  endTime: '',
-  totalDistance: '0',
-  avgSpeed: '0',
-  mountQuality: '0',
-  notes: '',
+function defaultForm(): UploadFormState {
+  return {
+    tripId: '',
+    deviceId: 'web-device-01',
+    deviceModel: 'Browser Upload',
+    collectorName: '',
+    mountType: 'RIGID',
+    vehicleType: 'SUV',
+    roadSurface: 'PAVED',
+    samplingProfile: 'BALANCED',
+    startTime: toDateTimeLocal(new Date()),
+    endTime: '',
+    mountQuality: '',
+    notes: '',
+  }
 }
 
-function TripsPage() {
-  const [trips, setTrips] = useState<TripListItem[]>([])
-  const [query, setQuery] = useState('')
-  const deferredQuery = useDeferredValue(query)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [uploadMessage, setUploadMessage] = useState<string | null>(null)
-  const [submitting, setSubmitting] = useState(false)
-  const [showUpload, setShowUpload] = useState(false)
+function UploadForm({ onUploaded }: { onUploaded: (message: string) => void }) {
+  const [form, setForm] = useState<UploadFormState>(defaultForm)
   const [file, setFile] = useState<File | null>(null)
-  const [formState, setFormState] = useState<UploadFormState>(DEFAULT_FORM)
+  const [submitting, setSubmitting] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
-  useEffect(() => {
-    let cancelled = false
-
-    async function load() {
-      setLoading(true)
-      try {
-        const response = await fetchTrips(deferredQuery.trim())
-        if (cancelled) return
-        startTransition(() => {
-          setTrips(response.items)
-          setError(null)
-          setLoading(false)
-        })
-      } catch (loadError) {
-        if (cancelled) return
-        setError(loadError instanceof Error ? loadError.message : 'Failed to load trips')
-        setLoading(false)
-      }
-    }
-
-    load()
-    return () => {
-      cancelled = true
-    }
-  }, [deferredQuery])
-
-  async function refreshTrips() {
-    const response = await fetchTrips(deferredQuery.trim())
-    setTrips(response.items)
+  function update<K extends keyof UploadFormState>(key: K, value: UploadFormState[K]) {
+    setForm((current) => ({ ...current, [key]: value }))
   }
 
-  async function handleUpload(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (!file) {
       setError('Select a trip sample file before uploading.')
       return
     }
-
     setSubmitting(true)
     setError(null)
-    setUploadMessage(null)
-
     try {
       const payload = new FormData()
-      payload.set('trip_id', formState.tripId)
-      payload.set('device_id', formState.deviceId)
-      payload.set('device_model', formState.deviceModel)
-      payload.set('collector_name', formState.collectorName)
-      payload.set('mount_type', formState.mountType)
-      payload.set('vehicle_type', formState.vehicleType)
-      payload.set('road_surface', formState.roadSurface)
-      payload.set('sampling_profile', formState.samplingProfile)
-      payload.set('start_time', String(new Date(formState.startTime).getTime()))
-      if (formState.endTime) {
-        payload.set('end_time', String(new Date(formState.endTime).getTime()))
-      }
-      payload.set('total_distance', formState.totalDistance)
-      payload.set('avg_speed', formState.avgSpeed)
-      payload.set('mount_quality', formState.mountQuality)
-      payload.set('notes', formState.notes)
+      if (form.tripId.trim()) payload.set('trip_id', form.tripId.trim())
+      payload.set('device_id', form.deviceId)
+      payload.set('device_model', form.deviceModel)
+      payload.set('collector_name', form.collectorName)
+      payload.set('mount_type', form.mountType)
+      payload.set('vehicle_type', form.vehicleType)
+      payload.set('road_surface', form.roadSurface)
+      payload.set('sampling_profile', form.samplingProfile)
+      payload.set('start_time', String(new Date(form.startTime).getTime()))
+      if (form.endTime) payload.set('end_time', String(new Date(form.endTime).getTime()))
+      if (form.mountQuality !== '') payload.set('mount_quality', form.mountQuality)
+      if (form.notes.trim()) payload.set('notes', form.notes.trim())
       payload.set('sample_file', file)
 
       const response = await uploadWebTrip(payload)
-      setUploadMessage(
-        `Trip ${response.trip_id} uploaded with ${response.samples_received.toLocaleString()} samples.`,
-      )
-      setFormState({
-        ...DEFAULT_FORM,
-        startTime: toDateTimeLocal(new Date()),
-      })
+      setForm(defaultForm())
       setFile(null)
-      setShowUpload(false)
-      await refreshTrips()
+      onUploaded(
+        `Trip ${response.trip_id} uploaded with ${response.samples_received.toLocaleString()} samples. It will appear as processed once the server has scored it.`,
+      )
     } catch (uploadError) {
-      setError(uploadError instanceof Error ? uploadError.message : 'Upload failed')
+      setError(errorMessage(uploadError, 'Upload failed'))
     } finally {
       setSubmitting(false)
     }
   }
 
-  function updateField<K extends keyof UploadFormState>(key: K, value: UploadFormState[K]) {
-    setFormState((current) => ({ ...current, [key]: value }))
-  }
-
   return (
-    <div className="space-y-4">
-      <PageHeader
-        title="Trips"
-        description="Trip records finalized by the Android uploader and manual web imports."
-        actions={
-          <Button variant={showUpload ? 'secondary' : 'default'} onClick={() => setShowUpload((open) => !open)}>
-            {showUpload ? <X className="size-4" /> : <FileUp className="size-4" />}
-            {showUpload ? 'Close upload' : 'Upload trip'}
-          </Button>
-        }
-      />
-
-      {error ? <Notice tone="error">{error}</Notice> : null}
-      {uploadMessage ? <Notice tone="success">{uploadMessage}</Notice> : null}
-
-      {showUpload ? (
-        <div className="flat-panel p-5">
-          <div className="mb-4">
-            <h2 className="text-base font-semibold text-foreground">Manual web upload</h2>
-            <p className="text-sm text-muted-foreground">
-              Import a JSON, NDJSON, JSONL, or GZip trip sample file with the metadata the app needs.
-            </p>
-          </div>
-          <form className="space-y-4" onSubmit={handleUpload}>
-            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-              <Field label="Trip ID (optional)">
-                <Input
-                  value={formState.tripId}
-                  onChange={(event) => updateField('tripId', event.target.value)}
-                  placeholder="web-trip-001"
-                />
-              </Field>
-              <Field label="Collector name">
-                <Input
-                  value={formState.collectorName}
-                  onChange={(event) => updateField('collectorName', event.target.value)}
-                  placeholder="Field operator"
-                  required
-                />
-              </Field>
-              <Field label="Device ID">
-                <Input
-                  value={formState.deviceId}
-                  onChange={(event) => updateField('deviceId', event.target.value)}
-                  required
-                />
-              </Field>
-              <Field label="Device model">
-                <Input
-                  value={formState.deviceModel}
-                  onChange={(event) => updateField('deviceModel', event.target.value)}
-                  required
-                />
-              </Field>
-              <Field label="Start time">
-                <Input
-                  type="datetime-local"
-                  value={formState.startTime}
-                  onChange={(event) => updateField('startTime', event.target.value)}
-                  required
-                />
-              </Field>
-              <Field label="End time">
-                <Input
-                  type="datetime-local"
-                  value={formState.endTime}
-                  onChange={(event) => updateField('endTime', event.target.value)}
-                />
-              </Field>
-              <Field label="Mount type">
-                <Select
-                  value={formState.mountType}
-                  onChange={(event) => updateField('mountType', event.target.value)}
-                >
-                  {['RIGID', 'DASH', 'HANDHELD'].map((option) => (
-                    <option key={option} value={option}>
-                      {option}
-                    </option>
-                  ))}
-                </Select>
-              </Field>
-              <Field label="Vehicle type">
-                <Select
-                  value={formState.vehicleType}
-                  onChange={(event) => updateField('vehicleType', event.target.value)}
-                >
-                  {['SUV', 'SEDAN', 'TRUCK', 'BUS', 'MOTORBIKE'].map((option) => (
-                    <option key={option} value={option}>
-                      {option}
-                    </option>
-                  ))}
-                </Select>
-              </Field>
-              <Field label="Road surface">
-                <Select
-                  value={formState.roadSurface}
-                  onChange={(event) => updateField('roadSurface', event.target.value)}
-                >
-                  {['PAVED', 'GRAVEL', 'DIRT', 'MIXED'].map((option) => (
-                    <option key={option} value={option}>
-                      {option}
-                    </option>
-                  ))}
-                </Select>
-              </Field>
-              <Field label="Sampling profile">
-                <Select
-                  value={formState.samplingProfile}
-                  onChange={(event) => updateField('samplingProfile', event.target.value)}
-                >
-                  {['HIGH', 'BALANCED', 'ECO'].map((option) => (
-                    <option key={option} value={option}>
-                      {option}
-                    </option>
-                  ))}
-                </Select>
-              </Field>
-              <Field label="Distance (km)">
-                <Input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={formState.totalDistance}
-                  onChange={(event) => updateField('totalDistance', event.target.value)}
-                />
-              </Field>
-              <Field label="Average speed (m/s)">
-                <Input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={formState.avgSpeed}
-                  onChange={(event) => updateField('avgSpeed', event.target.value)}
-                />
-              </Field>
-              <Field label="Mount quality">
-                <Input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={formState.mountQuality}
-                  onChange={(event) => updateField('mountQuality', event.target.value)}
-                />
-              </Field>
-              <Field label="Sample file">
-                <input
-                  type="file"
-                  className="field-shell pt-1.5"
-                  accept=".json,.jsonl,.ndjson,.gz"
-                  onChange={handleFileChange(setFile)}
-                  required
-                />
-              </Field>
-            </div>
-
-            <Field label="Notes">
-              <Textarea
-                value={formState.notes}
-                onChange={(event) => updateField('notes', event.target.value)}
-                placeholder="Context for review or recovery"
-              />
-            </Field>
-
-            <div className="flex justify-end">
-              <Button type="submit" disabled={submitting}>
-                {submitting ? <LoaderCircle className="size-4 animate-spin" /> : <FileUp className="size-4" />}
-                {submitting ? 'Uploading trip...' : 'Upload trip'}
-              </Button>
-            </div>
-          </form>
-        </div>
-      ) : null}
-
-      <div className="flat-panel overflow-hidden">
-        <div className="flex flex-col gap-3 border-b border-border px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="relative w-full sm:max-w-xs">
-            <Search className="absolute left-3 top-2.5 size-4 text-muted-foreground" />
-            <Input
-              placeholder="Search trip, device, or operator"
-              className="pl-9"
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-            />
-          </div>
-          <p className="text-sm text-muted-foreground">
-            {loading ? 'Loading...' : `${trips.length} trip${trips.length === 1 ? '' : 's'}`}
-          </p>
-        </div>
-
-        {loading ? (
-          <p className="px-4 py-8 text-sm text-muted-foreground">Loading trips...</p>
-        ) : trips.length === 0 ? (
-          <EmptyState
-            icon={Inbox}
-            title="No trips matched the current query"
-            description="Trips synced from the field app or uploaded here will appear in this registry."
-            className="m-4"
-          />
-        ) : (
-          <Table>
-            <TableHeader>
-              <TableRow className="hover:bg-transparent">
-                <TableHead>Trip</TableHead>
-                <TableHead>Device</TableHead>
-                <TableHead>Source</TableHead>
-                <TableHead>Start</TableHead>
-                <TableHead>Progress</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="text-right">Artifact</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {trips.map((trip) => (
-                <TableRow key={trip.trip_id}>
-                  <TableCell>
-                    <Link
-                      to="/dashboard/trips/$tripId"
-                      params={{ tripId: trip.trip_id }}
-                      className="font-mono text-xs font-medium text-primary hover:underline"
-                    >
-                      {trip.trip_id}
-                    </Link>
-                  </TableCell>
-                  <TableCell>
-                    <p className="text-sm text-foreground">{trip.device_model ?? 'Unknown device'}</p>
-                    <p className="text-xs text-muted-foreground">{trip.device_id}</p>
-                  </TableCell>
-                  <TableCell className="text-muted-foreground">
-                    <p>{trip.upload_source}</p>
-                    <p className="text-xs">{trip.operator_name ?? 'Mobile sync'}</p>
-                  </TableCell>
-                  <TableCell className="whitespace-nowrap text-muted-foreground">
-                    {formatDate(trip.start_time)}
-                  </TableCell>
-                  <TableCell>
-                    <p className="text-sm text-foreground">
-                      {trip.total_chunks_received}/{Math.max(trip.total_chunks_expected, 1)} chunks
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {trip.total_samples_received.toLocaleString()} samples
-                    </p>
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant={statusVariant(trip.status)}>{trip.status}</Badge>
-                  </TableCell>
-                  <TableCell className="text-right">
-                    {trip.status === 'UPLOADED' ? (
-                      <Button asChild variant="outline" size="sm">
-                        <a href={getTripDownloadUrl(trip.trip_id)}>
-                          <Download className="size-4" />
-                          Download
-                        </a>
-                      </Button>
-                    ) : (
-                      <span className="text-sm text-muted-foreground">Not ready</span>
-                    )}
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        )}
+    <div className="flat-panel p-5">
+      <div className="mb-4">
+        <h2 className="text-base font-semibold text-foreground">Manual web upload</h2>
+        <p className="text-sm text-muted-foreground">
+          Import a JSON, NDJSON, JSONL, or GZip sample file. Distance, speed and roughness are computed by the server.
+        </p>
       </div>
+      {error ? <Notice tone="error" className="mb-4">{error}</Notice> : null}
+      <form className="space-y-4" onSubmit={handleSubmit}>
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          <Field label="Trip ID (optional)">
+            <Input value={form.tripId} onChange={(event) => update('tripId', event.target.value)} placeholder="web-trip-001" />
+          </Field>
+          <Field label="Collector name">
+            <Input
+              value={form.collectorName}
+              onChange={(event) => update('collectorName', event.target.value)}
+              placeholder="Field operator"
+              required
+            />
+          </Field>
+          <Field label="Device ID">
+            <Input value={form.deviceId} onChange={(event) => update('deviceId', event.target.value)} required />
+          </Field>
+          <Field label="Device model">
+            <Input value={form.deviceModel} onChange={(event) => update('deviceModel', event.target.value)} required />
+          </Field>
+          <Field label="Start time">
+            <Input type="datetime-local" value={form.startTime} onChange={(event) => update('startTime', event.target.value)} required />
+          </Field>
+          <Field label="End time (optional)">
+            <Input type="datetime-local" value={form.endTime} onChange={(event) => update('endTime', event.target.value)} />
+          </Field>
+          <Field label="Mount type">
+            <OptionSelect value={form.mountType} options={['RIGID', 'DASH', 'HANDHELD']} onChange={(value) => update('mountType', value)} />
+          </Field>
+          <Field label="Vehicle type">
+            <OptionSelect
+              value={form.vehicleType}
+              options={['SUV', 'SEDAN', 'TRUCK', 'BUS', 'MOTORBIKE']}
+              onChange={(value) => update('vehicleType', value)}
+            />
+          </Field>
+          <Field label="Road surface">
+            <OptionSelect
+              value={form.roadSurface}
+              options={['PAVED', 'GRAVEL', 'DIRT', 'MIXED']}
+              onChange={(value) => update('roadSurface', value)}
+            />
+          </Field>
+          <Field label="Sampling profile">
+            <OptionSelect
+              value={form.samplingProfile}
+              options={['HIGH', 'BALANCED', 'ECO']}
+              onChange={(value) => update('samplingProfile', value)}
+            />
+          </Field>
+          <Field label="Mount quality (optional)">
+            <Input
+              type="number"
+              min="0"
+              step="0.01"
+              value={form.mountQuality}
+              onChange={(event) => update('mountQuality', event.target.value)}
+            />
+          </Field>
+          <Field label="Sample file">
+            <input
+              type="file"
+              className="field-shell pt-1.5"
+              accept=".json,.jsonl,.ndjson,.gz"
+              onChange={(event) => setFile(event.target.files?.[0] ?? null)}
+              required
+            />
+          </Field>
+        </div>
+
+        <Field label="Notes (optional)">
+          <Textarea value={form.notes} onChange={(event) => update('notes', event.target.value)} placeholder="Context for review" />
+        </Field>
+
+        <div className="flex justify-end">
+          <Button type="submit" disabled={submitting}>
+            {submitting ? <LoaderCircle className="size-4 animate-spin" /> : <FileUp className="size-4" />}
+            {submitting ? 'Uploading...' : 'Upload trip'}
+          </Button>
+        </div>
+      </form>
     </div>
+  )
+}
+
+function OptionSelect({ value, options, onChange }: { value: string; options: string[]; onChange: (value: string) => void }) {
+  return (
+    <Select value={value} onChange={(event) => onChange(event.target.value)}>
+      {options.map((option) => (
+        <option key={option} value={option}>
+          {option}
+        </option>
+      ))}
+    </Select>
   )
 }
 
@@ -424,33 +433,7 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
   )
 }
 
-function handleFileChange(setFile: (file: File | null) => void) {
-  return (event: ChangeEvent<HTMLInputElement>) => {
-    setFile(event.target.files?.[0] ?? null)
-  }
-}
-
-export function statusVariant(status: string): 'success' | 'warning' | 'destructive' | 'outline' {
-  if (status === 'UPLOADED') return 'success'
-  if (status === 'FAILED') return 'destructive'
-  if (status === 'UPLOADING' || status === 'PENDING' || status === 'STORED' || status === 'PROCESSING') {
-    return 'warning'
-  }
-  return 'outline'
-}
-
-function formatDate(value: number) {
-  return new Intl.DateTimeFormat(undefined, {
-    dateStyle: 'medium',
-    timeStyle: 'short',
-  }).format(new Date(value))
-}
-
 function toDateTimeLocal(value: Date) {
-  const year = value.getFullYear()
-  const month = String(value.getMonth() + 1).padStart(2, '0')
-  const day = String(value.getDate()).padStart(2, '0')
-  const hours = String(value.getHours()).padStart(2, '0')
-  const minutes = String(value.getMinutes()).padStart(2, '0')
-  return `${year}-${month}-${day}T${hours}:${minutes}`
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${value.getFullYear()}-${pad(value.getMonth() + 1)}-${pad(value.getDate())}T${pad(value.getHours())}:${pad(value.getMinutes())}`
 }

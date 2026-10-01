@@ -5,7 +5,7 @@ import secrets
 from jose import JWTError, jwt
 from sqlalchemy.orm import Session
 
-from .config import settings
+from .config import INSECURE_OPERATOR_PASSWORDS, settings
 from ..models.models import User
 
 HASH_ITERATIONS = 210_000
@@ -69,6 +69,16 @@ def authenticate_user(db: Session, username: str, password: str) -> User | None:
 def ensure_default_operator(db: Session) -> None:
     existing = db.query(User).filter(User.username == settings.OPERATOR_USERNAME).first()
     if existing is not None:
+        # Databases created before secrets were configured still hold a shipped
+        # default password. Replace it once a real one is set, but never touch a
+        # password an operator has changed themselves.
+        if settings.OPERATOR_PASSWORD not in INSECURE_OPERATOR_PASSWORDS and any(
+            verify_password(default, existing.password_hash)
+            for default in INSECURE_OPERATOR_PASSWORDS
+            if default
+        ):
+            existing.password_hash = get_password_hash(settings.OPERATOR_PASSWORD)
+            db.commit()
         return
 
     db.add(

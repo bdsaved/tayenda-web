@@ -34,6 +34,7 @@ class Device(Base):
     app_version: Mapped[str] = mapped_column(String, nullable=False)
     user_uuid: Mapped[str] = mapped_column(String, default=lambda: str(uuid.uuid4()), nullable=False)
     api_key: Mapped[str] = mapped_column(String, nullable=False)
+    last_seen_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, onupdate=utc_now, nullable=False)
 
@@ -71,11 +72,79 @@ class Trip(Base):
     notes: Mapped[str | None] = mapped_column(String, nullable=True)
     finalized_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     artifact_path: Mapped[str | None] = mapped_column(String, nullable=True)
+    # Results of road-roughness processing (see app/core/roughness.py).
+    processing_version: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)
+    processed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    roughness_avg: Mapped[float | None] = mapped_column(Float, nullable=True)
+    good_m: Mapped[float] = mapped_column(Float, default=0.0, server_default="0", nullable=False)
+    fair_m: Mapped[float] = mapped_column(Float, default=0.0, server_default="0", nullable=False)
+    poor_m: Mapped[float] = mapped_column(Float, default=0.0, server_default="0", nullable=False)
+    hazard_count: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)
+    tag_count: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, onupdate=utc_now, nullable=False)
 
 
+class RoadSegment(Base):
+    """A ~50 m stretch of a trip with its measured roughness."""
+
+    __tablename__ = "road_segments"
+    __table_args__ = (
+        Index("ix_road_segments_trip_id", "trip_id"),
+        Index("ix_road_segments_start_ts", "start_ts"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    trip_id: Mapped[str] = mapped_column(String, ForeignKey("trips.trip_id", ondelete="CASCADE"), nullable=False)
+    seq: Mapped[int] = mapped_column(Integer, nullable=False)
+    start_ts: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    length_m: Mapped[float] = mapped_column(Float, nullable=False)
+    distance_from_start_m: Mapped[float] = mapped_column(Float, nullable=False)
+    avg_speed: Mapped[float] = mapped_column(Float, nullable=False)
+    sample_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    roughness: Mapped[float] = mapped_column(Float, nullable=False)
+    condition: Mapped[str] = mapped_column(String, nullable=False)
+    # [[lon, lat], ...] in GeoJSON order.
+    coordinates: Mapped[list] = mapped_column(JSON, nullable=False)
+
+
+class Hazard(Base):
+    """A point hazard: a detected vertical jolt or a driver-tagged report."""
+
+    __tablename__ = "hazards"
+    __table_args__ = (
+        Index("ix_hazards_trip_id", "trip_id"),
+        Index("ix_hazards_ts", "ts"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    trip_id: Mapped[str] = mapped_column(String, ForeignKey("trips.trip_id", ondelete="CASCADE"), nullable=False)
+    ts: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    lat: Mapped[float] = mapped_column(Float, nullable=False)
+    lon: Mapped[float] = mapped_column(Float, nullable=False)
+    source: Mapped[str] = mapped_column(String, nullable=False)  # "detected" | "tagged"
+    kind: Mapped[str] = mapped_column(String, nullable=False)
+    magnitude: Mapped[float | None] = mapped_column(Float, nullable=True)
+    speed: Mapped[float | None] = mapped_column(Float, nullable=True)
+
+
+class TripTrack(Base):
+    """The full GPS route of a trip, kept after the raw file is deleted."""
+
+    __tablename__ = "trip_tracks"
+
+    trip_id: Mapped[str] = mapped_column(String, ForeignKey("trips.trip_id", ondelete="CASCADE"), primary_key=True)
+    # [[[lon, lat, ts, speed], ...], ...] -- one list per continuous part.
+    parts: Mapped[list] = mapped_column(JSON, nullable=False)
+    point_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    distance_m: Mapped[float] = mapped_column(Float, nullable=False)
+    start_ts: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    end_ts: Mapped[int] = mapped_column(BigInteger, nullable=False)
+
+
 class Chunk(Base):
+    """Legacy chunked-upload rows. No longer written; kept so old data stays readable."""
+
     __tablename__ = "chunks"
     __table_args__ = (UniqueConstraint("trip_id", "chunk_seq", name="uq_chunks_trip_seq"),)
 

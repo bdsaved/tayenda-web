@@ -18,15 +18,29 @@ the internal Docker services.
 
 Point DNS for the domain at the server running Nginx Proxy Manager.
 
-Create `web/.env` if you need to override defaults:
+Create `web/.env` (copy `web/.env.example`). The secrets are required; the
+stack will not start without them, and the API refuses the old shipped
+defaults in production:
 
 ```env
 PUBLIC_DOMAIN=tayenda.renai-labs.com
 NPM_UPSTREAM_PORT=3001
+# python -c "import secrets; print(secrets.token_urlsafe(48))"
+SECRET_KEY=<long random string>
+OPERATOR_USERNAME=admin
+OPERATOR_PASSWORD=<strong password>
+OPERATOR_EMAIL=you@example.org
 ```
 
 The default upstream port is `3001`, matching the existing Nginx Proxy Manager
 proxy host shown for `tayenda.renai-labs.com`.
+
+If the database already has the `admin` account with the old default
+password, the API replaces it with `OPERATOR_PASSWORD` on the next start.
+Changing `SECRET_KEY` signs everyone out once.
+
+Schema changes are applied automatically at startup (Alembic). Databases created
+by earlier versions, which never ran Alembic, are detected and upgraded in place.
 
 Start the stack from `web/`:
 
@@ -66,3 +80,27 @@ Build Android against the same domain:
 The app calls paths like `/api/v1/devices/register`, so the final API URL is:
 
 `https://tayenda.renai-labs.com/api/v1/devices/register`
+
+## Data processing
+
+Uploaded trips are analysed in the background (on upload, and every
+`PROCESS_INTERVAL_SECONDS`): each trip is split into ~50 m road segments scored
+by vertical-acceleration roughness, and jolts above `JOLT_THRESHOLD` are
+recorded as likely potholes. After an algorithm update every stored trip is
+re-processed automatically.
+
+Raw phone files of processed trips are deleted after `RAW_RETENTION_DAYS`
+(default 30). Segments and hazards stay in Postgres, so the map is unaffected,
+but those trips can no longer be downloaded or reprocessed. Set
+`RAW_RETENTION_DAYS=0` to keep raw files forever (budget disk accordingly:
+roughly 2-10 MB per hour of driving).
+
+## Smoke test
+
+```powershell
+cd server
+$env:OPERATOR_PASSWORD="<password>"; python -m scripts.smoke_test --base-url https://tayenda.renai-labs.com          # health only
+```
+
+Add `--full` to exercise the upload pipeline; that leaves a small test trip
+behind, which you can delete from the trip page.

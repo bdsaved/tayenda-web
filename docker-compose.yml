@@ -7,7 +7,7 @@ services:
     environment:
       POSTGRES_DB: tayenda
       POSTGRES_USER: user
-      POSTGRES_PASSWORD: password
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password}
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U user -d tayenda"]
       interval: 10s
@@ -23,14 +23,16 @@ services:
     expose:
       - "8000"
     environment:
-      DATABASE_URL: postgresql://user:password@db/tayenda
-      SECRET_KEY: supersecretkey
+      ENVIRONMENT: production
+      DATABASE_URL: postgresql://user:${POSTGRES_PASSWORD:-password}@db/tayenda
+      SECRET_KEY: ${SECRET_KEY:?Set SECRET_KEY in web/.env (see .env.example)}
       STORAGE_PATH: /app/storage
       WEB_CLIENT_ORIGIN: https://${PUBLIC_DOMAIN:-tayenda.renai-labs.com}
-      OPERATOR_USERNAME: admin
-      OPERATOR_PASSWORD: tayenda-admin
-      OPERATOR_EMAIL: brenalddzonzi@gmail.com
+      OPERATOR_USERNAME: ${OPERATOR_USERNAME:-admin}
+      OPERATOR_PASSWORD: ${OPERATOR_PASSWORD:?Set OPERATOR_PASSWORD in web/.env (see .env.example)}
+      OPERATOR_EMAIL: ${OPERATOR_EMAIL:-admin@tayenda.local}
       PUBLIC_WEB_ORIGIN: https://${PUBLIC_DOMAIN:-tayenda.renai-labs.com}
+      RAW_RETENTION_DAYS: ${RAW_RETENTION_DAYS:-30}
     depends_on:
       db:
         condition: service_healthy
@@ -39,14 +41,14 @@ services:
     build:
       context: ./client
       args:
-        VITE_API_URL: https://${PUBLIC_DOMAIN:-tayenda.renai-labs.com}
-        VITE_PUBLIC_WEB_URL: https://${PUBLIC_DOMAIN:-tayenda.renai-labs.com}
+        # Empty = same origin; Caddy routes /api/* to the server.
+        VITE_API_URL: ""
+        # Optional: Mapbox base map instead of OpenStreetMap (see client/.env.example).
+        VITE_MAPBOX_TOKEN: ${MAPBOX_TOKEN:-}
+        VITE_MAPBOX_STYLE: ${MAPBOX_STYLE:-}
     restart: unless-stopped
     expose:
       - "3000"
-    environment:
-      VITE_API_URL: https://${PUBLIC_DOMAIN:-tayenda.renai-labs.com}
-      VITE_PUBLIC_WEB_URL: https://${PUBLIC_DOMAIN:-tayenda.renai-labs.com}
     depends_on:
       - server
 

@@ -2,6 +2,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 import sys
 import asyncio
+import logging
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -12,20 +13,19 @@ if __package__ in {None, ""}:
 from app.api import v1
 from app.core.config import settings
 from app.core.db import SessionLocal, engine
+from app.core.migrate import run_migrations
 from app.core.processing import run_processing_loop
 from app.core.security import ensure_default_operator
-from app.models.base import Base
-from app.models import models  # noqa: F401  (register mappers before create_all)
 
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
+    settings.check_secrets()
     Path(settings.resolved_storage_path).mkdir(parents=True, exist_ok=True)
 
-    # Ensure the schema exists and a login-able operator account is present so the
-    # API is usable immediately on a fresh database. create_all is idempotent and
-    # only fills in missing tables, so it is safe alongside Alembic migrations.
-    Base.metadata.create_all(bind=engine)
+    # Bring the schema up to date and make sure a login-able operator exists so
+    # the API is usable immediately on a fresh database.
+    run_migrations(engine)
     db = SessionLocal()
     try:
         ensure_default_operator(db)
@@ -42,6 +42,8 @@ async def lifespan(_: FastAPI):
     except asyncio.CancelledError:
         pass
 
+logging.basicConfig(level=logging.INFO)
+
 app = FastAPI(
     title=settings.PROJECT_NAME,
     openapi_url="/openapi.json",
@@ -50,13 +52,7 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        settings.WEB_CLIENT_ORIGIN,
-        settings.PUBLIC_WEB_ORIGIN,
-        settings.NGROK_ORIGIN,
-        "http://localhost:3000",
-        "http://127.0.0.1:3000",
-    ],
+    allow_origins=settings.cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

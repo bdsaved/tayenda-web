@@ -1,11 +1,11 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
-import { type FormEvent, useState } from 'react'
+import { type FormEvent, useEffect, useState } from 'react'
 
 import { Button } from '../components/ui/button'
 import { Input } from '../components/ui/input'
 import { Notice } from '../components/ui/notice'
-import { getApiBaseUrl, loginOperator } from '../lib/api'
-import { storeSession } from '../lib/auth'
+import { errorMessage, getApiBaseUrl, loginOperator } from '../lib/api'
+import { consumeSessionExpired, isLoggedIn, storeSession } from '../lib/auth'
 
 export const Route = createFileRoute('/')({
   component: LoginPage,
@@ -13,22 +13,32 @@ export const Route = createFileRoute('/')({
 
 function LoginPage() {
   const navigate = useNavigate()
-  const [username, setUsername] = useState('admin')
-  const [password, setPassword] = useState('tayenda-admin')
+  const [username, setUsername] = useState('')
+  const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
+  const [expired, setExpired] = useState(false)
   const [submitting, setSubmitting] = useState(false)
+
+  useEffect(() => {
+    if (isLoggedIn()) {
+      void navigate({ to: '/dashboard', replace: true })
+      return
+    }
+    setExpired(consumeSessionExpired())
+  }, [navigate])
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     setSubmitting(true)
     setError(null)
+    setExpired(false)
 
     try {
       const session = await loginOperator(username, password)
       storeSession(session.access_token, session.user)
       await navigate({ to: '/dashboard' })
     } catch (loginError) {
-      setError(loginError instanceof Error ? loginError.message : 'Login failed')
+      setError(errorMessage(loginError, 'Login failed'))
     } finally {
       setSubmitting(false)
     }
@@ -49,6 +59,12 @@ function LoginPage() {
       <div className="flat-panel w-full max-w-sm p-6">
         <h2 className="text-base font-semibold text-foreground">Sign in</h2>
         <p className="mt-1 text-sm text-muted-foreground">Use the backend operator account.</p>
+
+        {expired && !error ? (
+          <Notice tone="warning" className="mt-4">
+            Your session expired. Please sign in again.
+          </Notice>
+        ) : null}
 
         {error ? (
           <Notice tone="error" className="mt-4">
@@ -83,7 +99,7 @@ function LoginPage() {
       </div>
 
       <p className="mt-4 text-xs text-muted-foreground">
-        API: <span className="font-mono">{getApiBaseUrl().replace(/^https?:\/\//, '')}</span>
+        API: <span className="font-mono">{getApiBaseUrl().replace(/^https?:\/\//, '') || 'same origin'}</span>
       </p>
     </main>
   )

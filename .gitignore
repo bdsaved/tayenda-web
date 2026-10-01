@@ -52,3 +52,7 @@ client/app.config.timestamp_*.js
 server/tayenda.db
 server/*.db
 server/storage/
+
+# app builds are published by scripts/publish-apk.sh, not committed
+downloads/*
+!downloads/.gitkeep

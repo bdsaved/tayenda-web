@@ -59,6 +59,7 @@ services:
       - "${NPM_UPSTREAM_PORT:-3001}:80"
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./downloads:/srv/downloads:ro
     depends_on:
       - client
       - server

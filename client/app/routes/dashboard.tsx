@@ -63,7 +63,7 @@ function DashboardLayout() {
   // session and returns to login), so network failures never log the user out.
   useEffect(() => {
     if (!isLoggedIn()) {
-      void navigate({ to: '/', replace: true })
+      void navigate({ to: '/login', replace: true })
       return
     }
     setUser(getStoredUser())
@@ -93,7 +93,7 @@ function DashboardLayout() {
 
   function logout() {
     clearSession()
-    void navigate({ to: '/' })
+    void navigate({ to: '/login' })
   }
 
   if (!ready) {

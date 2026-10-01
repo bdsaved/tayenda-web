@@ -289,7 +289,7 @@ function handleUnauthorized() {
   markSessionExpired()
   if (typeof window !== 'undefined' && !redirecting) {
     redirecting = true
-    window.location.assign('/')
+    window.location.assign('/login')
   }
 }
 

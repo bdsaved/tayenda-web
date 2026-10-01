@@ -11,6 +11,7 @@
 // Import Routes
 
 import { Route as rootRoute } from './routes/__root'
+import { Route as LoginImport } from './routes/login'
 import { Route as DashboardImport } from './routes/dashboard'
 import { Route as IndexImport } from './routes/index'
 import { Route as DashboardIndexImport } from './routes/dashboard.index'
@@ -23,6 +24,12 @@ import { Route as DashboardAnalysisImport } from './routes/dashboard.analysis'
 import { Route as DashboardTripsTripIdImport } from './routes/dashboard.trips_.$tripId'
 
 // Create/Update Routes
+
+const LoginRoute = LoginImport.update({
+  id: '/login',
+  path: '/login',
+  getParentRoute: () => rootRoute,
+} as any)
 
 const DashboardRoute = DashboardImport.update({
   id: '/dashboard',
@@ -100,6 +107,13 @@ declare module '@tanstack/react-router' {
       path: '/dashboard'
       fullPath: '/dashboard'
       preLoaderRoute: typeof DashboardImport
+      parentRoute: typeof rootRoute
+    }
+    '/login': {
+      id: '/login'
+      path: '/login'
+      fullPath: '/login'
+      preLoaderRoute: typeof LoginImport
       parentRoute: typeof rootRoute
     }
     '/dashboard/analysis': {
@@ -192,6 +206,7 @@ const DashboardRouteWithChildren = DashboardRoute._addFileChildren(
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/dashboard': typeof DashboardRouteWithChildren
+  '/login': typeof LoginRoute
   '/dashboard/analysis': typeof DashboardAnalysisRoute
   '/dashboard/devices': typeof DashboardDevicesRoute
   '/dashboard/hazards': typeof DashboardHazardsRoute
@@ -204,6 +219,7 @@ export interface FileRoutesByFullPath {
 
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/login': typeof LoginRoute
   '/dashboard/analysis': typeof DashboardAnalysisRoute
   '/dashboard/devices': typeof DashboardDevicesRoute
   '/dashboard/hazards': typeof DashboardHazardsRoute
@@ -218,6 +234,7 @@ export interface FileRoutesById {
   __root__: typeof rootRoute
   '/': typeof IndexRoute
   '/dashboard': typeof DashboardRouteWithChildren
+  '/login': typeof LoginRoute
   '/dashboard/analysis': typeof DashboardAnalysisRoute
   '/dashboard/devices': typeof DashboardDevicesRoute
   '/dashboard/hazards': typeof DashboardHazardsRoute
@@ -233,6 +250,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/dashboard'
+    | '/login'
     | '/dashboard/analysis'
     | '/dashboard/devices'
     | '/dashboard/hazards'
@@ -244,6 +262,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/login'
     | '/dashboard/analysis'
     | '/dashboard/devices'
     | '/dashboard/hazards'
@@ -256,6 +275,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/dashboard'
+    | '/login'
     | '/dashboard/analysis'
     | '/dashboard/devices'
     | '/dashboard/hazards'
@@ -270,11 +290,13 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   DashboardRoute: typeof DashboardRouteWithChildren
+  LoginRoute: typeof LoginRoute
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   DashboardRoute: DashboardRouteWithChildren,
+  LoginRoute: LoginRoute,
 }
 
 export const routeTree = rootRoute
@@ -288,7 +310,8 @@ export const routeTree = rootRoute
       "filePath": "__root.tsx",
       "children": [
         "/",
-        "/dashboard"
+        "/dashboard",
+        "/login"
       ]
     },
     "/": {
@@ -306,6 +329,9 @@ export const routeTree = rootRoute
         "/dashboard/",
         "/dashboard/trips_/$tripId"
       ]
+    },
+    "/login": {
+      "filePath": "login.tsx"
     },
     "/dashboard/analysis": {
       "filePath": "dashboard.analysis.tsx",
